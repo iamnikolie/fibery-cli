@@ -127,6 +127,11 @@ fibery state 42 "In Progress" --db "Development/Dev Task"
 # Add comment
 fibery comment 42 --db "Development/Dev Task" "Fixed in PR #42"
 
+# @mention a user (notifies them), reference an entity, or reply in a thread
+fibery comment 42 --db "Development/Dev Task" "please review" --mention dev@acme.com
+fibery comment 42 --db "Development/Dev Task" "dup of" --ref DT-99
+fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
+
 # Read all comments on an entity (oldest first, markdown bodies)
 fibery comments list 42 --db "Development/Dev Task"
 

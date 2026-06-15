@@ -34,7 +34,8 @@ cmd/
   create.go / update.go        entity create / update
   delete.go                    entity delete
   state.go                     workflow state change
-  comment.go                   add comment (URL or UUID)
+  comment.go                   add comment (URL or UUID); --mention / --ref / --reply-to
+  mention.go                   mention & reference token helpers used by comment.go
   doc.go                       doc get / doc set (by secret or by UUID+field)
   import.go                    bulk import from JSON array file
   exec.go                      raw passthrough to POST /api/commands

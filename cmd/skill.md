@@ -42,7 +42,7 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery exec <json>` | Send any raw Fibery command; destructive ones require `--yes` | `--yes` (for delete/remove/drop) |
 | `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required) |
 | `fibery state <id> <state-name>` | Set workflow state (case-insensitive) | `--db` (required) |
-| `fibery comment <url-or-id> <text>` | Add comment | `--db` (required when not using URL) |
+| `fibery comment <url-or-id> [text]` | Add comment; optionally @mention users, reference entities, or reply | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>` |
 | `fibery comments list <id>` | List all comments on an entity with author, date, and markdown body | `--db` (required) |
 | `fibery doc get <secret-or-id>` | Get document as Markdown | `--db`, `--field` (when entity ID given) |
 | `fibery doc set <secret-or-id> <md>` | Set document content | `--db`, `--field` (when entity ID given) |
@@ -133,6 +133,32 @@ fibery comments list DT-42 --db "Development/Dev Task"
 
 Returns each comment as a Markdown section with author, RFC3339 datetime, and
 the body content (fetched per-comment via the documents API).
+
+## Commenting: mentions, references, replies
+
+```bash
+# Plain comment
+fibery comment 42 --db "Development/Dev Task" "Fixed in PR #42"
+
+# @mention a user by email — prepends a live mention that notifies them
+fibery comment 42 --db "Development/Dev Task" "please review" --mention dev@acme.com
+
+# Reference another entity — by URL (any database) or by ID within the host database
+fibery comment 42 --db "Development/Dev Task" "dup of" --ref DT-99
+fibery comment 42 --db "Development/Dev Task" "related" --ref https://acme.fibery.io/Support_platform/Support_ticket/X-100
+
+# Reply to a comment (thread). --reply-to takes the parent comment's UUID or
+# public ID; the positional arg is still the host entity.
+fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
+
+# Combine — flags are repeatable; body is optional when a --mention/--ref is given
+fibery comment 42 --db "Development/Dev Task" "see context" \
+  --mention dev@acme.com --ref DT-99 --reply-to 36129
+```
+
+`--mention` and `--ref` both render as Fibery mention nodes via the
+`[[#@<typeId>/<entityId>]]` document shorthand — users get notified, entities
+become clickable references. Tokens are prepended to the body in the order given.
 
 ## Inbox snapshots
 

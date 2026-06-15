@@ -196,9 +196,20 @@ func (c *Client) SetDocument(ctx context.Context, secret, markdown string) error
 }
 
 // AddComment adds a Markdown comment to an entity via the 2-step Fibery comments API.
-func (c *Client) AddComment(ctx context.Context, db, entityID, content string) error {
+// When parentCommentID is non-empty the new comment is threaded as a reply: it is
+// still linked to the host entity's comments collection, but also points at the
+// parent comment via comments/parent.
+func (c *Client) AddComment(ctx context.Context, db, entityID, content, parentCommentID string) error {
 	commentID := newUUID()
 	docSecret := newUUID()
+
+	commentEntity := map[string]any{
+		"fibery/id":               commentID,
+		"comment/document-secret": docSecret,
+	}
+	if parentCommentID != "" {
+		commentEntity["comments/parent"] = map[string]any{"fibery/id": parentCommentID}
+	}
 
 	// Step 1: create comment entity + link it to the parent entity's comments collection
 	if _, err := c.One(ctx, Command{
@@ -208,11 +219,8 @@ func (c *Client) AddComment(ctx context.Context, db, entityID, content string) e
 				map[string]any{
 					"command": "fibery.entity/create",
 					"args": map[string]any{
-						"type": "comments/comment",
-						"entity": map[string]any{
-							"fibery/id":               commentID,
-							"comment/document-secret": docSecret,
-						},
+						"type":   "comments/comment",
+						"entity": commentEntity,
 					},
 				},
 				map[string]any{
