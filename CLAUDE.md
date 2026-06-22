@@ -37,6 +37,7 @@ cmd/
   comment.go                   add comment (URL or UUID); --mention / --ref / --reply-to
   mention.go                   mention & reference token helpers used by comment.go
   doc.go                       doc get / doc set (by secret or by UUID+field)
+  files.go                     files list / download (attachments)
   import.go                    bulk import from JSON array file
   exec.go                      raw passthrough to POST /api/commands
   me.go                        current user

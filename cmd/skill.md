@@ -46,6 +46,8 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery comments list <id>` | List all comments on an entity with author, date, and markdown body | `--db` (required) |
 | `fibery doc get <secret-or-id>` | Get document as Markdown | `--db`, `--field` (when entity ID given) |
 | `fibery doc set <secret-or-id> <md>` | Set document content | `--db`, `--field` (when entity ID given) |
+| `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
+| `fibery files download <entity-id>` | Download attachments to disk | `--db` (required), `--field`, `--out`, `--secret`, `--name` |
 | `fibery me` | Show current user | — |
 | `fibery inbox <db> [db...]` | Recent activity on my entities in given databases | `--hours` (default 48), `--absolute` |
 | `fibery schema` | Show full schema JSON | — |
@@ -283,6 +285,19 @@ fibery doc set abc123secret "# Title\nContent here"
 # By entity UUID (auto-fetches secret)
 fibery doc get <uuid> --db "Development/Dev Task" --field "Development/Description"
 fibery doc set <uuid> "# Title\nContent" --db "Development/Dev Task" --field "Development/Description"
+```
+
+**List / download file attachments:**
+```bash
+# List files attached to an entity (all file fields, or one via --field)
+fibery files list 75 --db "Development/Dev Task"
+fibery files list DT-75 --db "Development/Dev Task" --field "Files/Files" --format json
+
+# Download every attachment to a directory (names sanitized, collisions de-duped)
+fibery files download 75 --db "Development/Dev Task" --out /tmp/fibtest
+
+# Download a single file directly by its secret (no entity lookup)
+fibery files download --secret <file-secret> --name report.csv --out /tmp
 ```
 
 **Inspect schema:**

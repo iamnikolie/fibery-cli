@@ -164,6 +164,24 @@ You can also get a document secret manually via FQL:
 fibery query '{"q/from":"Development/Dev Task","q/select":{"secret":["Development/Description","Collaboration~Documents/secret"]},"q/limit":1}'
 ```
 
+### Files
+
+```bash
+# List file attachments on an entity (public ID, prefixed ID, or UUID)
+fibery files list 75 --db "Development/Dev Task"
+fibery files list 75 --db "Development/Dev Task" --format json
+
+# Limit to one file field (default: all file fields on the database)
+fibery files list 75 --db "Development/Dev Task" --field "Files/Files"
+
+# Download every attachment into a directory (--out defaults to ".").
+# File names are preserved, sanitized for the filesystem, and de-duped on collision.
+fibery files download 75 --db "Development/Dev Task" --out /tmp/fibtest
+
+# Download a single file directly by its secret, no entity lookup needed
+fibery files download --secret <file-secret> --name report.csv --out /tmp
+```
+
 ## Flags
 
 | Flag | Description |

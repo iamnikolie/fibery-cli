@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -79,6 +80,13 @@ func New(token, baseURL string) *Client {
 // It sets auth headers, retries on 429 with exponential backoff, and returns the response body.
 // method: HTTP verb; path: relative path e.g. "/api/commands"; body: nil for GET.
 func (c *Client) request(ctx context.Context, method, path string, body []byte) ([]byte, error) {
+	b, _, err := c.requestRaw(ctx, method, path, body)
+	return b, err
+}
+
+// requestRaw is request() that also returns the response headers. Used when the
+// caller needs metadata from the response (e.g. Content-Type for file downloads).
+func (c *Client) requestRaw(ctx context.Context, method, path string, body []byte) ([]byte, http.Header, error) {
 	const maxRetries = 3
 	wait := time.Second
 
@@ -89,7 +97,7 @@ func (c *Client) request(ctx context.Context, method, path string, body []byte) 
 		}
 		req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bodyReader)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		req.Header.Set("Authorization", "Token "+c.token)
 		if body != nil {
@@ -98,33 +106,45 @@ func (c *Client) request(ctx context.Context, method, path string, body []byte) 
 
 		resp, err := c.http.Do(req)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		b, _ := io.ReadAll(resp.Body)
+		header := resp.Header
 		resp.Body.Close()
 
 		if c.Verbose {
-			fmt.Fprintf(os.Stderr, "← HTTP %d\n%s\n", resp.StatusCode, string(b))
+			// File bodies are raw bytes, not JSON — log only the size to avoid dumping binary.
+			if isBinaryPath(path) {
+				fmt.Fprintf(os.Stderr, "← HTTP %d (%d bytes)\n", resp.StatusCode, len(b))
+			} else {
+				fmt.Fprintf(os.Stderr, "← HTTP %d\n%s\n", resp.StatusCode, string(b))
+			}
 		}
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			if attempt == maxRetries {
-				return nil, fmt.Errorf("HTTP 429: rate limited after %d retries", maxRetries)
+				return nil, nil, fmt.Errorf("HTTP 429: rate limited after %d retries", maxRetries)
 			}
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, nil, ctx.Err()
 			case <-time.After(wait):
 			}
 			wait *= 2
 			continue
 		}
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))
+			return nil, nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(b))
 		}
-		return b, nil
+		return b, header, nil
 	}
-	return nil, fmt.Errorf("unreachable")
+	return nil, nil, fmt.Errorf("unreachable")
+}
+
+// isBinaryPath reports whether a path returns raw bytes rather than JSON, so
+// verbose logging can avoid dumping binary file contents to stderr.
+func isBinaryPath(path string) bool {
+	return strings.HasPrefix(path, "/api/files/")
 }
 
 // Do sends a batch of commands to POST /api/commands.
@@ -181,6 +201,17 @@ func (c *Client) GetDocument(ctx context.Context, secret string) (string, error)
 		return envelope.Content, nil
 	}
 	return string(b), nil
+}
+
+// DownloadFile fetches the raw bytes of a Fibery file attachment by its secret.
+// GET /api/files/<secret> returns the file body as-is (not a JSON envelope).
+// Returns the file bytes and the response Content-Type header.
+func (c *Client) DownloadFile(ctx context.Context, secret string) ([]byte, string, error) {
+	b, header, err := c.requestRaw(ctx, http.MethodGet, "/api/files/"+secret, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("client.DownloadFile: %w", err)
+	}
+	return b, header.Get("Content-Type"), nil
 }
 
 // SetDocument writes Markdown content to a Fibery document by its secret.
