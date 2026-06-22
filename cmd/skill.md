@@ -48,6 +48,8 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery doc set <secret-or-id> <md>` | Set document content | `--db`, `--field` (when entity ID given) |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
 | `fibery files download <entity-id>` | Download attachments to disk | `--db` (required), `--field`, `--out`, `--secret`, `--name` |
+| `fibery files upload <entity-id> <file>...` | Upload local files and attach to a file field | `--db` (required), `--field`, `--no-attach` |
+| `fibery files embed <entity-id> <image>...` | Upload images and embed them inline into a doc field | `--db` (required), `--field` (required) |
 | `fibery me` | Show current user | — |
 | `fibery inbox <db> [db...]` | Recent activity on my entities in given databases | `--hours` (default 48), `--absolute` |
 | `fibery schema` | Show full schema JSON | — |
@@ -298,6 +300,35 @@ fibery files download 75 --db "Development/Dev Task" --out /tmp/fibtest
 
 # Download a single file directly by its secret (no entity lookup)
 fibery files download --secret <file-secret> --name report.csv --out /tmp
+```
+
+**Upload / attach / embed files:**
+```bash
+# Upload local files and attach them to an entity's file field
+# (--field auto-resolves when the DB has a single file field)
+fibery files upload 75 --db "Development/Dev Task" diagram.png screenshot.png
+fibery files upload DT-75 --db "Development/Dev Task" --field "Files/Files" report.pdf
+
+# Upload only, no attach — prints "secret  id  name" (building block for scripts)
+fibery files upload --no-attach diagram.png
+
+# Embed image(s) INLINE into a rich-text field (renders inside the document body)
+fibery files embed 75 --db "Development/Dev Task" --field "Development/description" diagram.png
+```
+
+**Workflow — create a ticket with images:**
+```bash
+ID=$(fibery create "Development/Dev Task" "Development/Name=Repro: broken chart" --id-only)
+fibery files upload "$ID" --db "Development/Dev Task" shot1.png shot2.png
+```
+
+**Workflow — generate a Mermaid diagram locally and put it in Fibery:**
+```bash
+# Render locally (mermaid-cli), then attach AND/OR embed inline
+mmdc -i flow.mmd -o flow.png
+fibery files upload "$ID" --db "Development/Dev Task" flow.png            # as an attachment
+fibery files embed  "$ID" --db "Development/Dev Task" \
+  --field "Development/description" flow.png                              # inline in the description
 ```
 
 **Inspect schema:**

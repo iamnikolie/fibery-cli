@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"strings"
 	"time"
@@ -87,6 +89,13 @@ func (c *Client) request(ctx context.Context, method, path string, body []byte) 
 // requestRaw is request() that also returns the response headers. Used when the
 // caller needs metadata from the response (e.g. Content-Type for file downloads).
 func (c *Client) requestRaw(ctx context.Context, method, path string, body []byte) ([]byte, http.Header, error) {
+	return c.requestRawCT(ctx, method, path, body, "application/json")
+}
+
+// requestRawCT is requestRaw with an explicit request Content-Type, so non-JSON
+// bodies (e.g. multipart file uploads) set their own. An empty contentType sends
+// no Content-Type header.
+func (c *Client) requestRawCT(ctx context.Context, method, path string, body []byte, contentType string) ([]byte, http.Header, error) {
 	const maxRetries = 3
 	wait := time.Second
 
@@ -100,8 +109,8 @@ func (c *Client) requestRaw(ctx context.Context, method, path string, body []byt
 			return nil, nil, err
 		}
 		req.Header.Set("Authorization", "Token "+c.token)
-		if body != nil {
-			req.Header.Set("Content-Type", "application/json")
+		if body != nil && contentType != "" {
+			req.Header.Set("Content-Type", contentType)
 		}
 
 		resp, err := c.http.Do(req)
@@ -201,6 +210,54 @@ func (c *Client) GetDocument(ctx context.Context, secret string) (string, error)
 		return envelope.Content, nil
 	}
 	return string(b), nil
+}
+
+// FileInfo describes a file entity as returned by POST /api/files.
+type FileInfo struct {
+	ID          string `json:"fibery/id"`
+	Secret      string `json:"fibery/secret"`
+	Name        string `json:"fibery/name"`
+	ContentType string `json:"fibery/content-type"`
+}
+
+// UploadFile uploads raw bytes as a new Fibery file via multipart POST /api/files
+// and returns the created file entity. contentType is the MIME type sent for the
+// part; empty means none. The file is not attached to any entity — callers link
+// it via add-collection-items (a file field) or by referencing its secret in a
+// document.
+func (c *Client) UploadFile(ctx context.Context, filename, contentType string, data []byte) (*FileInfo, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename=%q`, filename))
+	if contentType != "" {
+		h.Set("Content-Type", contentType)
+	}
+	part, err := w.CreatePart(h)
+	if err != nil {
+		return nil, fmt.Errorf("client.UploadFile: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return nil, fmt.Errorf("client.UploadFile: %w", err)
+	}
+	if err := w.Close(); err != nil {
+		return nil, fmt.Errorf("client.UploadFile: %w", err)
+	}
+
+	b, _, err := c.requestRawCT(ctx, http.MethodPost, "/api/files", buf.Bytes(), w.FormDataContentType())
+	if err != nil {
+		return nil, fmt.Errorf("client.UploadFile: %w", err)
+	}
+	// The endpoint may return the file object directly or wrapped in an array.
+	var fi FileInfo
+	if json.Unmarshal(b, &fi) == nil && fi.Secret != "" {
+		return &fi, nil
+	}
+	var arr []FileInfo
+	if json.Unmarshal(b, &arr) == nil && len(arr) > 0 {
+		return &arr[0], nil
+	}
+	return nil, fmt.Errorf("client.UploadFile: unexpected response: %s", string(b))
 }
 
 // DownloadFile fetches the raw bytes of a Fibery file attachment by its secret.

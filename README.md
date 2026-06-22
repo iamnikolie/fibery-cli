@@ -182,6 +182,37 @@ fibery files download 75 --db "Development/Dev Task" --out /tmp/fibtest
 fibery files download --secret <file-secret> --name report.csv --out /tmp
 ```
 
+Upload local files and attach them to a file field (`--field` auto-resolves when
+the database has a single file field):
+
+```bash
+fibery files upload 75 --db "Development/Dev Task" diagram.png screenshot.png
+fibery files upload 75 --db "Development/Dev Task" --field "Files/Files" report.pdf
+
+# Upload only, no attach — prints "secret  id  name" for scripting
+fibery files upload --no-attach diagram.png
+```
+
+Embed images inline into a rich-text field (they render inside the document body,
+exactly like a pasted image):
+
+```bash
+fibery files embed 75 --db "Development/Dev Task" --field "Development/description" diagram.png
+```
+
+Common workflows:
+
+```bash
+# Create a ticket with screenshots attached
+ID=$(fibery create "Development/Dev Task" "Development/Name=Repro: broken chart" --id-only)
+fibery files upload "$ID" --db "Development/Dev Task" shot1.png shot2.png
+
+# Generate a Mermaid diagram locally, then attach it and embed it inline
+mmdc -i flow.mmd -o flow.png
+fibery files upload "$ID" --db "Development/Dev Task" flow.png
+fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/description" flow.png
+```
+
 ## Flags
 
 | Flag | Description |

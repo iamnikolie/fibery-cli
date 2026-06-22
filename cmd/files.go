@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,11 +18,12 @@ import (
 )
 
 var (
-	filesDB     string
-	filesField  string
-	filesOut    string
-	filesSecret string
-	filesName   string
+	filesDB       string
+	filesField    string
+	filesOut      string
+	filesSecret   string
+	filesName     string
+	filesNoAttach bool
 )
 
 // fileEntry is one attached file, rendered to the user and emitted as JSON.
@@ -136,6 +138,200 @@ Examples:
 		fmt.Fprintf(os.Stderr, "Saved %d file(s) to %s\n", saved, filesOut)
 		return nil
 	},
+}
+
+var filesUploadCmd = &cobra.Command{
+	Use:   "upload <entity-id> <file>...",
+	Short: "Upload local files and attach them to an entity's file field",
+	Long: `Upload one or more local files and attach them to an entity's file field.
+
+When --field is omitted the database's single file field is used; if the database
+has several file fields, pass --field to choose.
+
+With --no-attach the files are uploaded but not attached to any entity; the
+secret and id of each are printed (a building block for scripting / embedding).
+
+Examples:
+  fibery files upload 75 --db "Development/Dev Task" diagram.png screenshot.png
+  fibery files upload DT-75 --db "Development/Dev Task" --field "Files/Files" report.pdf
+  fibery files upload --no-attach diagram.png`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+
+		// --no-attach: upload only, no entity, print secret/id/name (tab-separated).
+		if filesNoAttach {
+			for _, path := range args {
+				fi, err := uploadLocalFile(ctx, path)
+				if err != nil {
+					return err
+				}
+				fmt.Printf("%s\t%s\t%s\n", fi.Secret, fi.ID, fi.Name)
+			}
+			return nil
+		}
+
+		if len(args) < 2 {
+			return fmt.Errorf("provide <entity-id> and at least one file (or use --no-attach to upload without attaching)")
+		}
+		if filesDB == "" {
+			return fmt.Errorf("--db is required (e.g. --db \"Development/Dev Task\")")
+		}
+		entityRef, paths := args[0], args[1:]
+
+		field, err := resolveFileField(filesDB, filesField)
+		if err != nil {
+			return err
+		}
+		uuid, err := resolveEntityRef(ctx, filesDB, entityRef)
+		if err != nil {
+			return err
+		}
+
+		var items []any
+		for _, path := range paths {
+			fi, err := uploadLocalFile(ctx, path)
+			if err != nil {
+				return err
+			}
+			items = append(items, map[string]any{"fibery/id": fi.ID})
+			fmt.Printf("uploaded %s (%s)\n", fi.Name, fi.Secret)
+		}
+		if err := addCollectionItems(ctx, filesDB, uuid, field, items); err != nil {
+			return fmt.Errorf("attach to %s: %w", field, err)
+		}
+		fmt.Fprintf(os.Stderr, "Attached %d file(s) to %s on %s\n", len(items), field, entityRef)
+		return nil
+	},
+}
+
+var filesEmbedCmd = &cobra.Command{
+	Use:   "embed <entity-id> <image>...",
+	Short: "Upload images and embed them inline into a rich-text document field",
+	Long: `Upload one or more images and append them inline (as Markdown image links)
+to an entity's rich-text document field, e.g. its Description. The images render
+inside the document body — the same way a pasted image does in the Fibery UI.
+
+Examples:
+  fibery files embed 75 --db "Development/Dev Task" --field "Development/Description" diagram.png
+  fibery files embed DT-75 --db "Development/Dev Task" --field "Development/Description" a.png b.png`,
+	Args: cobra.MinimumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		if filesDB == "" {
+			return fmt.Errorf("--db is required (e.g. --db \"Development/Dev Task\")")
+		}
+		if filesField == "" {
+			return fmt.Errorf("--field is required (the rich-text/document field, e.g. \"Development/Description\")")
+		}
+		entityRef, paths := args[0], args[1:]
+
+		uuid, err := resolveEntityRef(ctx, filesDB, entityRef)
+		if err != nil {
+			return err
+		}
+		secret, err := resolveDocSecretByID(ctx, filesDB, uuid, filesField)
+		if err != nil {
+			return err
+		}
+		content, err := cli.GetDocument(ctx, secret)
+		if err != nil {
+			return err
+		}
+
+		var b strings.Builder
+		b.WriteString(content)
+		for _, path := range paths {
+			fi, err := uploadLocalFile(ctx, path)
+			if err != nil {
+				return err
+			}
+			if b.Len() > 0 {
+				b.WriteString("\n\n")
+			}
+			b.WriteString(inlineImageMarkdown(fi.Name, fi.Secret))
+			fmt.Printf("embedded %s (%s)\n", fi.Name, fi.Secret)
+		}
+		if err := cli.SetDocument(ctx, secret, b.String()); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Embedded %d image(s) into %s on %s\n", len(paths), filesField, entityRef)
+		return nil
+	},
+}
+
+// resolveFileField returns the file field to use: field if given, otherwise the
+// database's single file field. Errors when there are zero or several.
+func resolveFileField(db, field string) (string, error) {
+	if field != "" {
+		return field, nil
+	}
+	schema, _ := cache.LoadSchema(account)
+	fields := discoverFileFields(schema, db)
+	switch len(fields) {
+	case 0:
+		return "", fmt.Errorf("no file fields found on %q — pass --field explicitly", db)
+	case 1:
+		return fields[0], nil
+	default:
+		return "", fmt.Errorf("multiple file fields on %q (%s) — pass --field to choose", db, strings.Join(fields, ", "))
+	}
+}
+
+// uploadLocalFile reads a local file and uploads it, inferring the content type
+// from its extension.
+func uploadLocalFile(ctx context.Context, path string) (*client.FileInfo, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	name := filepath.Base(path)
+	return cli.UploadFile(ctx, name, detectContentType(name), data)
+}
+
+// inlineImageMarkdown renders the Markdown image link Fibery uses for inline
+// attachments in rich-text documents: ![name](/api/files/<secret>).
+func inlineImageMarkdown(name, secret string) string {
+	return fmt.Sprintf("![%s](/api/files/%s)", markdownAltText(name), secret)
+}
+
+// markdownAltText neutralizes characters that would break the ![..](..) syntax.
+func markdownAltText(name string) string {
+	repl := strings.NewReplacer("\n", " ", "\r", " ", "[", " ", "]", " ")
+	out := strings.TrimSpace(repl.Replace(name))
+	if out == "" {
+		return "image"
+	}
+	return out
+}
+
+// contentTypeByExt maps common extensions to MIME types deterministically, so
+// uploads don't depend on the host's mime database for the usual cases.
+var contentTypeByExt = map[string]string{
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".svg":  "image/svg+xml",
+	".webp": "image/webp",
+	".pdf":  "application/pdf",
+	".csv":  "text/csv",
+	".txt":  "text/plain",
+	".json": "application/json",
+	".md":   "text/markdown",
+}
+
+// detectContentType returns the MIME type for a filename from its extension,
+// falling back to the system mime database, then application/octet-stream.
+func detectContentType(filename string) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ct, ok := contentTypeByExt[ext]; ok {
+		return ct
+	}
+	if ct := mime.TypeByExtension(ext); ct != "" {
+		return ct
+	}
+	return "application/octet-stream"
 }
 
 // listEntityFiles resolves an entity reference and returns its attached files.
@@ -333,7 +529,16 @@ func init() {
 	filesDownloadCmd.Flags().StringVar(&filesSecret, "secret", "", "download a single file by its fibery/secret (no entity ID needed)")
 	filesDownloadCmd.Flags().StringVar(&filesName, "name", "", "filename to use with --secret")
 
+	filesUploadCmd.Flags().StringVar(&filesDB, "db", "", "database name (e.g. \"Development/Dev Task\")")
+	filesUploadCmd.Flags().StringVar(&filesField, "field", "", "file field name (default: the DB's only file field)")
+	filesUploadCmd.Flags().BoolVar(&filesNoAttach, "no-attach", false, "upload only; print secret/id without attaching to an entity")
+
+	filesEmbedCmd.Flags().StringVar(&filesDB, "db", "", "database name (e.g. \"Development/Dev Task\")")
+	filesEmbedCmd.Flags().StringVar(&filesField, "field", "", "rich-text/document field to embed into (e.g. \"Development/Description\")")
+
 	filesCmd.AddCommand(filesListCmd)
 	filesCmd.AddCommand(filesDownloadCmd)
+	filesCmd.AddCommand(filesUploadCmd)
+	filesCmd.AddCommand(filesEmbedCmd)
 	rootCmd.AddCommand(filesCmd)
 }

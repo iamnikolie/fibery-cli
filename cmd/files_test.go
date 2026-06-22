@@ -66,6 +66,35 @@ func TestDiscoverFileFields(t *testing.T) {
 	assert.Empty(t, discoverFileFields(schema, "Nope/Nope"))
 }
 
+func TestInlineImageMarkdown(t *testing.T) {
+	// Standard markdown image pointing at the file secret — the format Fibery
+	// itself uses for inline attachments in rich-text documents.
+	assert.Equal(t, "![diagram.png](/api/files/abc-123)", inlineImageMarkdown("diagram.png", "abc-123"))
+
+	// Newlines and markdown-breaking brackets in the name are neutralized so the
+	// link target stays intact.
+	assert.Equal(t, "![a b c.png](/api/files/s)", inlineImageMarkdown("a\nb]c.png", "s"))
+
+	// Empty name falls back to a generic label.
+	assert.Equal(t, "![image](/api/files/s)", inlineImageMarkdown("", "s"))
+}
+
+func TestDetectContentType(t *testing.T) {
+	cases := map[string]string{
+		"diagram.png":  "image/png",
+		"photo.JPG":    "image/jpeg",
+		"a.jpeg":       "image/jpeg",
+		"icon.svg":     "image/svg+xml",
+		"doc.pdf":      "application/pdf",
+		"data.csv":     "text/csv",
+		"mystery.zzz":  "application/octet-stream",
+		"noext":        "application/octet-stream",
+	}
+	for in, want := range cases {
+		assert.Equal(t, want, detectContentType(in), "for %q", in)
+	}
+}
+
 func TestBuildFilesQuery(t *testing.T) {
 	q := buildFilesQuery("Development/Dev Task", []string{"Files/Files"}, "uuid-123")
 
