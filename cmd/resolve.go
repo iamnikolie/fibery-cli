@@ -42,14 +42,46 @@ Script-friendly (extract the UUID):
 			return printSpaceSummary(cmd.Context(), space)
 		}
 
-		// If db couldn't be inferred from URL, search all databases in the space
+		// If db couldn't be inferred from URL, the URL is the 2-segment /Space/Slug-id
+		// form — ambiguous: it may be an entity OR a space/wiki document (both share
+		// that shape and can carry the same public id). Resolve both candidates and
+		// disambiguate by which one's name matches the URL slug.
 		if db == "" {
+			slug := normalize(urlTitleSlug(args[0]))
+
 			entity, matchedDB, searchErr := searchSpaceByPublicID(cmd.Context(), space, publicID)
 			if searchErr != nil {
 				return fmt.Errorf("resolve: could not find entity #%s in space %q: %w", publicID, space, searchErr)
 			}
+			entityName := ""
+			if entity != nil {
+				var m map[string]any
+				if json.Unmarshal(entity, &m) == nil {
+					entityName = normalize(asStr(m["Name"]))
+				}
+			}
+
+			// Clean entity hit (name matches the slug) → don't consult query-views.
+			if entity != nil && entityName == slug {
+				if resolveIDOnly {
+					return printResolvedID(entity)
+				}
+				return printEntityLLM(cmd.Context(), entity, matchedDB, "")
+			}
+
+			// Ambiguous or no entity: consult the document endpoint. Prefer the
+			// document when its name matches the slug, or when there is no entity.
+			docV, _ := cli.QueryView(cmd.Context(), publicID)
+			if docV != nil && docV.DocumentSecret != "" && (normalize(docV.Name) == slug || entity == nil) {
+				if resolveIDOnly {
+					fmt.Println(docV.DocumentSecret)
+					return nil
+				}
+				return printDocumentView(cmd.Context(), docV)
+			}
+
 			if entity == nil {
-				return fmt.Errorf("resolve: entity #%s not found in space %q", publicID, space)
+				return fmt.Errorf("resolve: #%s not found in space %q (not an entity or space document)", publicID, space)
 			}
 			if resolveIDOnly {
 				return printResolvedID(entity)
@@ -118,6 +150,21 @@ func printResolvedID(raw json.RawMessage) error {
 
 // rePublicID matches trailing numeric ID in a URL slug, e.g. "Fix-bug-5621" → "5621"
 var rePublicID = regexp.MustCompile(`-(\d+)$`)
+
+// urlTitleSlug returns the title slug from a Fibery URL's last path segment,
+// stripped of its trailing "-<publicId>". Used to disambiguate a 2-segment URL
+// (which may be an entity or a space document with the same public id) by name.
+func urlTitleSlug(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	segs := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(segs) == 0 {
+		return ""
+	}
+	return rePublicID.ReplaceAllString(segs[len(segs)-1], "")
+}
 
 // resolveURL parses a Fibery URL and returns database, publicID, space.
 // database may be empty for 2-segment URLs where the db could not be inferred.

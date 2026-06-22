@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -10,8 +11,10 @@ import (
 )
 
 var (
-	updateDB        string
-	updateDocFields []string
+	updateDB          string
+	updateDocFields   []string
+	updateSkipInvalid bool
+	updateMakeEnum    bool
 )
 
 var updateCmd = &cobra.Command{
@@ -63,6 +66,7 @@ Examples:
 		}
 
 		// Separate scalar fields from collection fields
+		opts := resolveOpts{createMissingEnum: updateMakeEnum}
 		entity := map[string]any{"fibery/id": entityID}
 		type collField struct {
 			name string
@@ -70,12 +74,23 @@ Examples:
 		}
 		var collections []collField
 		for _, k := range fieldOrder {
+			if verr := validateField(schema, updateDB, k); verr != nil {
+				if updateSkipInvalid {
+					fmt.Fprintf(os.Stderr, "skipping: %v\n", verr)
+					continue
+				}
+				return verr
+			}
 			vals := fieldMap[k]
 			if len(vals) > 1 || isCollectionField(schema, updateDB, k) {
 				collections = append(collections, collField{k, vals})
 			} else {
-				resolved, err := resolveFieldValue(cmd.Context(), schema, updateDB, k, vals[0])
+				resolved, err := resolveFieldValueOpts(cmd.Context(), schema, updateDB, k, vals[0], opts)
 				if err != nil {
+					if updateSkipInvalid {
+						fmt.Fprintf(os.Stderr, "skipping field %q: %v\n", k, err)
+						continue
+					}
 					return fmt.Errorf("field %q: %w", k, err)
 				}
 				entity[k] = resolved
@@ -96,11 +111,18 @@ Examples:
 		for _, col := range collections {
 			items := make([]any, 0, len(col.vals))
 			for _, v := range col.vals {
-				item, err := resolveFieldValue(cmd.Context(), schema, updateDB, col.name, v)
+				item, err := resolveFieldValueOpts(cmd.Context(), schema, updateDB, col.name, v, opts)
 				if err != nil {
+					if updateSkipInvalid {
+						fmt.Fprintf(os.Stderr, "skipping collection %q value %q: %v\n", col.name, v, err)
+						continue
+					}
 					return fmt.Errorf("collection field %q value %q: %w", col.name, v, err)
 				}
 				items = append(items, item)
+			}
+			if len(items) == 0 {
+				continue
 			}
 			if err := addCollectionItems(cmd.Context(), updateDB, entityID, col.name, items); err != nil {
 				return fmt.Errorf("add-collection-items %q: %w", col.name, err)
@@ -142,5 +164,7 @@ Examples:
 func init() {
 	updateCmd.Flags().StringVar(&updateDB, "db", "", "database name (e.g. \"Space/Database\")")
 	updateCmd.Flags().StringArrayVar(&updateDocFields, "doc", nil, `set document field: --doc "Space/Description=# Heading\n\ncontent"`)
+	updateCmd.Flags().BoolVar(&updateSkipInvalid, "skip-invalid", false, "skip fields/values that don't resolve instead of failing the whole update")
+	updateCmd.Flags().BoolVar(&updateMakeEnum, "create-missing-enum", false, "create absent enum values by name instead of failing")
 	rootCmd.AddCommand(updateCmd)
 }

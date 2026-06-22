@@ -283,6 +283,140 @@ func (c *Client) SetDocument(ctx context.Context, secret, markdown string) error
 	return nil
 }
 
+// QueryAll runs an entity query repeatedly with an increasing q/offset, paging in
+// chunks of pageSize until a page returns fewer than pageSize rows, and returns the
+// concatenated result as a single JSON array. This sidesteps Fibery's per-query
+// row cap (q/limit max 3001). The query should include a stable q/order-by so paging
+// is deterministic; q/limit and q/offset are set per page. params may be nil.
+func (c *Client) QueryAll(ctx context.Context, query map[string]any, params map[string]any, pageSize int) (json.RawMessage, error) {
+	if pageSize <= 0 {
+		pageSize = 1000
+	}
+	all := []json.RawMessage{}
+	for offset := 0; ; offset += pageSize {
+		page := make(map[string]any, len(query)+2)
+		for k, v := range query {
+			page[k] = v
+		}
+		page["q/limit"] = pageSize
+		page["q/offset"] = offset
+
+		args := map[string]any{"query": page}
+		if params != nil {
+			args["params"] = params
+		}
+		raw, err := c.One(ctx, Command{Command: "fibery.entity/query", Args: args})
+		if err != nil {
+			return nil, err
+		}
+		var rows []json.RawMessage
+		if err := json.Unmarshal(raw, &rows); err != nil {
+			return nil, fmt.Errorf("client.QueryAll: decode page: %w", err)
+		}
+		all = append(all, rows...)
+		if len(rows) < pageSize {
+			break
+		}
+	}
+	out, err := json.Marshal(all)
+	if err != nil {
+		return nil, fmt.Errorf("client.QueryAll: marshal: %w", err)
+	}
+	return out, nil
+}
+
+// ViewRecord is a Fibery "view" (board, list, document, …) as returned by the
+// undocumented query-views RPC. For space/wiki documents, DocumentSecret is set
+// and Type == "document"; other view types leave DocumentSecret empty.
+type ViewRecord struct {
+	ID             string
+	Name           string
+	PublicID       string
+	Type           string
+	DocumentSecret string
+	ContainerAppID string
+}
+
+// viewRPCResponse / viewRaw decode the query-views JSON-RPC response.
+type viewRPCResponse struct {
+	Result []viewRaw `json:"result"`
+	Error  *struct {
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+type viewRaw struct {
+	ID       string `json:"fibery/id"`
+	Name     string `json:"fibery/name"`
+	PublicID string `json:"fibery/public-id"`
+	Type     string `json:"fibery/type"`
+	Meta     struct {
+		DocumentSecret string `json:"documentSecret"`
+	} `json:"fibery/meta"`
+	ContainerApp struct {
+		ID string `json:"fibery/id"`
+	} `json:"fibery/container-app"`
+}
+
+func (r viewRaw) toRecord() ViewRecord {
+	return ViewRecord{
+		ID:             r.ID,
+		Name:           r.Name,
+		PublicID:       r.PublicID,
+		Type:           r.Type,
+		DocumentSecret: r.Meta.DocumentSecret,
+		ContainerAppID: r.ContainerApp.ID,
+	}
+}
+
+// QueryViews calls the undocumented POST /api/views/json-rpc "query-views" method
+// and returns the matching views. A nil filter returns every view in the workspace.
+// NOTE: this endpoint is undocumented and may change without notice.
+func (c *Client) QueryViews(ctx context.Context, filter map[string]any) ([]ViewRecord, error) {
+	params := map[string]any{}
+	if filter != nil {
+		params["filter"] = filter
+	}
+	body, err := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"method":  "query-views",
+		"params":  params,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("client.QueryViews: marshal: %w", err)
+	}
+	b, err := c.request(ctx, http.MethodPost, "/api/views/json-rpc", body)
+	if err != nil {
+		return nil, fmt.Errorf("client.QueryViews: %w", err)
+	}
+	var resp viewRPCResponse
+	if err := json.Unmarshal(b, &resp); err != nil {
+		return nil, fmt.Errorf("client.QueryViews: decode: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("client.QueryViews: %s", resp.Error.Message)
+	}
+	out := make([]ViewRecord, len(resp.Result))
+	for i, r := range resp.Result {
+		out[i] = r.toRecord()
+	}
+	return out, nil
+}
+
+// QueryView resolves a single view by its public ID (the trailing number in a
+// space document/view URL). Returns an error if no view has that public ID.
+func (c *Client) QueryView(ctx context.Context, publicID string) (*ViewRecord, error) {
+	views, err := c.QueryViews(ctx, map[string]any{"publicIds": []string{publicID}})
+	if err != nil {
+		return nil, err
+	}
+	if len(views) == 0 {
+		return nil, fmt.Errorf("view #%s not found", publicID)
+	}
+	v := views[0]
+	return &v, nil
+}
+
 // AddComment adds a Markdown comment to an entity via the 2-step Fibery comments API.
 // When parentCommentID is non-empty the new comment is threaded as a reply: it is
 // still linked to the host entity's comments collection, but also points at the

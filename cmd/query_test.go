@@ -6,6 +6,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestParseWhereClause_NormalizesParamRefs(t *testing.T) {
+	clause, err := parseWhereClause(`["=",["fibery/public-id"],"?id"]`)
+	assert.NoError(t, err)
+	arr := clause.([]any)
+	assert.Equal(t, "$id", arr[2])
+}
+
+func TestParseWhereClause_InvalidJSON(t *testing.T) {
+	_, err := parseWhereClause("not json")
+	assert.Error(t, err)
+}
+
 func TestNormalizeFQLParams_RewritesQuestionMarkKeys(t *testing.T) {
 	// Native Fibery FQL uses ?var, the CLI uses $var. Accept both so the user
 	// doesn't get a server-side "Dangling meta character '?'" crash.

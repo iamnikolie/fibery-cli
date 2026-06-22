@@ -60,12 +60,15 @@ func runSchemaSync(ctx context.Context) error {
 }
 
 var schemaShowCmd = &cobra.Command{
-	Use:   "show <database>",
-	Short: "Show fields for a database",
-	Long: `Print a Markdown table of fields for the given database.
+	Use:     "show <database>",
+	Aliases: []string{"fields"},
+	Short:   "Show fields for a database",
+	Long: `Print a Markdown table of fields (name / type / kind / required) for the given
+database. Also available as "fibery schema fields <database>".
 
 Example:
-  fibery schema show "Space/Database"`,
+  fibery schema show "Space/Database"
+  fibery schema fields "Space/Database"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		schema, err := cache.LoadSchema(account)

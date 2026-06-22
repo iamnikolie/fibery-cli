@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	importDB   string
-	importFile string
+	importDB       string
+	importFile     string
+	importMakeEnum bool
 )
 
 // classifyImportRow splits JSON field values into three buckets:
@@ -110,9 +111,10 @@ Usage:
 			canon := func(k string) string { return resolveFieldName(schema, importDB, k) }
 			scalars, arrays, passthroughFields := classifyImportRow(row, canon)
 
+			opts := resolveOpts{createMissingEnum: importMakeEnum}
 			maps.Copy(entity, passthroughFields)
 			for k, strVal := range scalars {
-				resolved, err := resolveFieldValue(cmd.Context(), schema, importDB, k, strVal)
+				resolved, err := resolveFieldValueOpts(cmd.Context(), schema, importDB, k, strVal, opts)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "row %d field %q: %v\n", i+1, k, err)
 					continue
@@ -154,7 +156,7 @@ Usage:
 				for _, rawItem := range col.items {
 					var strItem string
 					if json.Unmarshal(rawItem, &strItem) == nil {
-						resolved, err := resolveFieldValue(cmd.Context(), schema, importDB, col.field, strItem)
+						resolved, err := resolveFieldValueOpts(cmd.Context(), schema, importDB, col.field, strItem, opts)
 						if err != nil {
 							fmt.Fprintf(os.Stderr, "row %d collection %q item: %v\n", i+1, col.field, err)
 							continue
@@ -187,5 +189,6 @@ Usage:
 func init() {
 	importCmd.Flags().StringVar(&importDB, "db", "", "target database (e.g. \"Space/Database\")")
 	importCmd.Flags().StringVar(&importFile, "file", "", "path to JSON array file")
+	importCmd.Flags().BoolVar(&importMakeEnum, "create-missing-enum", false, "create absent enum values by name instead of skipping the field")
 	rootCmd.AddCommand(importCmd)
 }

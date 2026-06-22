@@ -36,6 +36,9 @@ var (
 	listLimit  int
 	listSort   string
 	listFields []string
+	listWhere  string
+	listAll    bool
+	listParams string
 )
 
 var sortAliases = map[string]string{
@@ -99,21 +102,48 @@ Examples:
 			dir = "q/desc"
 		}
 
-		result, err := cli.One(cmd.Context(), client.Command{
-			Command: "fibery.entity/query",
-			Args: map[string]any{
-				"query": map[string]any{
-					"q/from":     db,
-					"q/select":   sel,
-					"q/order-by": []any{[]any{[]any{sortField}, dir}},
-					"q/limit":    listLimit,
-				},
-			},
-		})
+		query := map[string]any{
+			"q/from":     db,
+			"q/select":   sel,
+			"q/order-by": []any{[]any{[]any{sortField}, dir}},
+		}
+		if listWhere != "" {
+			clause, werr := parseWhereClause(listWhere)
+			if werr != nil {
+				return werr
+			}
+			query["q/where"] = clause
+		}
+
+		var params map[string]any
+		if listParams != "" {
+			if perr := json.Unmarshal([]byte(listParams), &params); perr != nil {
+				return fmt.Errorf("invalid --params JSON: %w", perr)
+			}
+			params = normalizeFQLParams(params)
+		}
+
+		var result json.RawMessage
+		var err error
+		if listAll {
+			result, err = cli.QueryAll(cmd.Context(), query, params, 1000)
+		} else {
+			query["q/limit"] = listLimit
+			listArgs := map[string]any{"query": query}
+			if params != nil {
+				listArgs["params"] = params
+			}
+			result, err = cli.One(cmd.Context(), client.Command{
+				Command: "fibery.entity/query",
+				Args:    listArgs,
+			})
+		}
 		if err != nil {
 			return err
 		}
-		paginationHint(os.Stderr, result, listLimit)
+		if !listAll {
+			paginationHint(os.Stderr, result, listLimit)
+		}
 		return outputJSON(result, func() error {
 			return render.List(os.Stdout, result)
 		})
@@ -124,5 +154,8 @@ func init() {
 	listCmd.Flags().IntVar(&listLimit, "limit", 50, "max results")
 	listCmd.Flags().StringVar(&listSort, "sort", "-created", `sort field: "created", "modified", "-created", "-modified", or any Fibery field name`)
 	listCmd.Flags().StringSliceVar(&listFields, "fields", nil, "comma-separated field aliases to return (e.g. \"Name,State,Priority\")")
+	listCmd.Flags().StringVar(&listWhere, "where", "", "FQL where-clause as JSON (e.g. '[\"=\",[\"workflow/state\",\"enum/name\"],\"$s\"]')")
+	listCmd.Flags().StringVar(&listParams, "params", "", `query params as JSON for --where, e.g. '{"$s":"Open"}'`)
+	listCmd.Flags().BoolVar(&listAll, "all", false, "return every matching row, paging past the 3001-row cap")
 	rootCmd.AddCommand(listCmd)
 }

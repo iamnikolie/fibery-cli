@@ -33,19 +33,22 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 |---------|-------------|-----------|
 | `fibery search <text>` | Find entities by name | `--db`, `--limit` (default 20) |
 | `fibery get <id>` | Fetch one entity by public ID, prefixed ID, or UUID — shows all fields | `--db` (required), `--id-only`, `--fields` |
-| `fibery resolve <url>` | Fetch entity by Fibery URL | `--id-only`, `--fields` |
-| `fibery list <database>` | List entities in a database | `--limit` (default 50), `--sort` (e.g. `-created`, `-modified`), `--fields` |
-| `fibery query <json>` | Raw FQL query | `--params '{"$var":"val"}'` |
-| `fibery create <db> [field=value...]` | Create entity; repeat field for multi-select | `--doc "Field=content"`, `--id-only` |
-| `fibery update <id> [field=value...]` | Update entity; repeat field to append to multi-select | `--db` (required), `--doc "Field=content"` |
+| `fibery resolve <url>` | Fetch entity OR space/wiki document by Fibery URL | `--id-only`, `--fields` |
+| `fibery list <database>` | List entities in a database | `--limit` (default 50), `--sort`, `--fields`, `--where`, `--params`, `--all` |
+| `fibery query [json]` | FQL query — raw JSON, or built from flags | `--params`, `--db`, `--select`, `--where`, `--limit`, `--order`, `--all` |
+| `fibery count <database>` | Count entities (server aggregate, falls back to paging) | `--where`, `--params` |
+| `fibery create <db> [field=value...]` | Create entity; repeat field for multi-select | `--doc "Field=content"`, `--id-only`, `--skip-invalid`, `--create-missing-enum` |
+| `fibery update <id> [field=value...]` | Update entity; repeat field to append to multi-select | `--db` (required), `--doc`, `--skip-invalid`, `--create-missing-enum` |
 | `fibery delete <id>` | Delete entity (requires `--yes`) | `--db` (required), `--yes` (required) |
 | `fibery exec <json>` | Send any raw Fibery command; destructive ones require `--yes` | `--yes` (for delete/remove/drop) |
-| `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required) |
+| `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required), `--create-missing-enum` |
 | `fibery state <id> <state-name>` | Set workflow state (case-insensitive) | `--db` (required) |
 | `fibery comment <url-or-id> [text]` | Add comment; optionally @mention users, reference entities, or reply | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>` |
 | `fibery comments list <id>` | List all comments on an entity with author, date, and markdown body | `--db` (required) |
-| `fibery doc get <secret-or-id>` | Get document as Markdown | `--db`, `--field` (when entity ID given) |
-| `fibery doc set <secret-or-id> <md>` | Set document content | `--db`, `--field` (when entity ID given) |
+| `fibery doc get <secret\|id\|url>` | Get document as Markdown | `--db`, `--field` (entity ID), `--secret` (raw UUID secret) |
+| `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
+| `fibery doc append <secret\|id\|url> <md>` | Append Markdown to a document | `--db`, `--field`, `--secret` |
+| `fibery docs list` | List space/wiki documents (left-nav pages) | `--space`, `--limit` |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
 | `fibery files download <entity-id>` | Download attachments to disk | `--db` (required), `--field`, `--out`, `--secret`, `--name` |
 | `fibery files upload <entity-id> <file>...` | Upload local files and attach to a file field | `--db` (required), `--field`, `--no-attach` |
@@ -54,7 +57,7 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery inbox <db> [db...]` | Recent activity on my entities in given databases | `--hours` (default 48), `--absolute` |
 | `fibery schema` | Show full schema JSON | — |
 | `fibery schema sync` | Refresh schema cache | — |
-| `fibery schema show <db>` | Field table (name / type / kind / required) | — |
+| `fibery schema show <db>` (alias `fields`) | Field table (name / type / kind / required) | — |
 | `fibery schema enums <db>` | Enum field values with fibery/id | — |
 | `fibery skill` | Print this skill reference | — |
 
@@ -88,6 +91,12 @@ no separate `get --id-only` round-trip is needed.
 
 Field names are also case-insensitive: `Development/name` auto-corrects to
 `Development/Name` (the canonical name from the cached schema) before the call.
+An unknown field that is close to a real one errors with a suggestion
+(`field "X" not found — did you mean "Y"?`).
+
+Forgiving flags for `create`/`update`/`import`:
+- `--skip-invalid` — skip a field/value that doesn't resolve instead of failing the whole call.
+- `--create-missing-enum` — create an absent enum value (by name) and assign it, instead of erroring.
 
 ## --doc escape sequences
 
@@ -273,6 +282,30 @@ fibery query '{"q/from":"Development/Dev Task","q/select":{"ID":["fibery/public-
   --params '{"$id":"42"}'
 ```
 
+**Query builder mode (no FQL JSON needed):**
+```bash
+# Omit the JSON and use flags — the CLI assembles the FQL.
+fibery query --db "Development/Dev Task" --select "Development/name" --limit 5
+fibery query --db "Development/Dev Task" \
+  --where '["=",["workflow/state","enum/name"],"$s"]' --params '{"$s":"Open"}'
+```
+(`--select` field names are case-corrected against the schema. For nested selects
+use raw FQL JSON. You cannot mix a positional JSON query with the `--db` flags.)
+
+**Count and page past the 3001-row cap:**
+```bash
+fibery count "Development/Dev Task"                       # total
+fibery count "Development/Dev Task" \
+  --where '["=",["workflow/state","enum/name"],"$s"]' --params '{"$s":"Open"}'
+
+# --all streams every matching row (pages with q/offset); works on list and query.
+fibery list "Development/Dev Task" --where '["=",["workflow/state","enum/name"],"$s"]' \
+  --params '{"$s":"Released"}' --all --json
+fibery query --db "GitLab/Merge Request" --select "gitlab/name" --all --json
+```
+`count` uses a server-side aggregate when allowed; databases with row-level
+permissions reject aggregates, so it transparently falls back to paging.
+
 **Raw Fibery command (any mutation):**
 ```bash
 fibery exec '{"command":"fibery.entity/delete","args":{"type":"Space/Database","entity":{"fibery/id":"<uuid>"}}}'
@@ -287,7 +320,31 @@ fibery doc set abc123secret "# Title\nContent here"
 # By entity UUID (auto-fetches secret)
 fibery doc get <uuid> --db "Development/Dev Task" --field "Development/Description"
 fibery doc set <uuid> "# Title\nContent" --db "Development/Dev Task" --field "Development/Description"
+
+# Append instead of replacing (any of secret / id / url)
+fibery doc append <uuid> "## New section\n\nmore" --db "Development/Dev Task" --field "Development/Description"
+
+# If a raw document secret happens to be UUID-shaped, force secret mode with --secret
+fibery doc get 550e8400-e29b-41d4-a716-446655440000 --secret
 ```
+
+**Space/wiki documents (left-nav pages):**
+These are not entities — they live behind Fibery's (undocumented) views API. The CLI
+resolves them by URL or public id.
+```bash
+# List documents (optionally one space)
+fibery docs list
+fibery docs list --space Development --limit 50
+
+# Read / write / append by the document's URL
+fibery resolve "https://acme.fibery.io/Development/My-Doc-280"       # prints name + secret + content
+fibery resolve "https://acme.fibery.io/Development/My-Doc-280" --id-only   # → documentSecret
+fibery doc get    "https://acme.fibery.io/Development/My-Doc-280"
+fibery doc set    "https://acme.fibery.io/Development/My-Doc-280" "# New body"
+fibery doc append "https://acme.fibery.io/Development/My-Doc-280" "appended line"
+```
+Note: writing a document round-trips through Fibery's markdown normalizer, which
+drops trailing-whitespace hard line breaks (cosmetic; content is preserved).
 
 **List / download file attachments:**
 ```bash

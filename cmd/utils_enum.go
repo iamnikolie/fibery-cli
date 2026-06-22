@@ -166,8 +166,15 @@ func resolveUserByEmail(ctx context.Context, email string) (map[string]any, erro
 	return map[string]any{"fibery/id": asStr(items[0]["id"])}, nil
 }
 
-// resolveFieldValue resolves a field value: JSON passthrough → UUID wrap → enum/user lookup → plain string.
-func resolveFieldValue(ctx context.Context, schema map[string]any, db, field, value string) (any, error) {
+// resolveOpts tunes field-value resolution for bulk/forgiving flows.
+type resolveOpts struct {
+	// createMissingEnum creates an absent enum value (by name) instead of erroring.
+	createMissingEnum bool
+}
+
+// resolveFieldValueOpts resolves a field value: JSON passthrough → UUID wrap →
+// enum/user lookup → plain string. resolveOpts tunes forgiving/bulk behavior.
+func resolveFieldValueOpts(ctx context.Context, schema map[string]any, db, field, value string, opts resolveOpts) (any, error) {
 	// Fast path: explicit JSON or UUID reference — no schema lookup needed.
 	if strings.HasPrefix(value, "{") || isUUID(value) {
 		return parseFieldValue(value)
@@ -183,10 +190,41 @@ func resolveFieldValue(ctx context.Context, schema map[string]any, db, field, va
 	}
 
 	if isEnumLikeType(fieldType) {
-		return resolveEnumByName(ctx, fieldType, value)
+		v, err := resolveEnumByName(ctx, fieldType, value)
+		if err != nil && opts.createMissingEnum && enumValueNotFound(err) {
+			return createEnumValue(ctx, fieldType, value)
+		}
+		return v, err
 	}
 
 	return value, nil
+}
+
+// enumValueNotFound reports whether err is the "enum value not found" error from
+// resolveEnumByName (as opposed to a network/parse error).
+func enumValueNotFound(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "not found in")
+}
+
+// createEnumValue creates a new value (by name) in an enum type and returns a
+// {"fibery/id": uuid} reference to it.
+func createEnumValue(ctx context.Context, enumType, name string) (map[string]any, error) {
+	result, err := cli.One(ctx, client.Command{
+		Command: "fibery.entity/create",
+		Args:    map[string]any{"type": enumType, "entity": map[string]any{"enum/name": name}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create enum value %q in %s: %w", name, enumType, err)
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(result, &m) != nil {
+		return nil, fmt.Errorf("create enum value %q: unexpected response", name)
+	}
+	id := strings.Trim(string(m["fibery/id"]), `"`)
+	if id == "" {
+		return nil, fmt.Errorf("create enum value %q: no fibery/id in response", name)
+	}
+	return map[string]any{"fibery/id": id}, nil
 }
 
 // resolveDocSecretByID returns the Collaboration document secret for the given entity field.

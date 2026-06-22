@@ -57,7 +57,8 @@ fibery schema sync
 Inspect the schema:
 
 ```bash
-fibery schema show "Development/Dev Task"   # field table (name / type / kind)
+fibery schema show "Development/Dev Task"   # field table (name / type / kind / required)
+fibery schema fields "Development/Dev Task" # alias of "schema show"
 fibery schema enums "Development/Dev Task"  # enum values with fibery/id
 ```
 
@@ -84,6 +85,19 @@ fibery query '{"q/from":"Development/Dev Task","q/select":{"ID":["fibery/public-
 # Parameterised query (--params is a sibling of the query object, not inside it)
 fibery query '{"q/from":"Development/Dev Task","q/select":{"ID":["fibery/public-id"]},"q/where":["=",["fibery/public-id"],"$id"],"q/limit":1}' \
   --params '{"$id":"42"}'
+
+# Query builder — no FQL JSON; flags assemble the query
+fibery query --db "Development/Dev Task" --select "Development/name" --limit 5
+fibery query --db "Development/Dev Task" \
+  --where '["=",["workflow/state","enum/name"],"$s"]' --params '{"$s":"Open"}'
+
+# Count entities (server aggregate, falls back to paging on permissioned DBs)
+fibery count "Development/Dev Task"
+fibery count "Development/Dev Task" --where '["=",["workflow/state","enum/name"],"$s"]' --params '{"$s":"Open"}'
+
+# --all returns every matching row, paging past Fibery's 3001-row cap (list and query)
+fibery list "Development/Dev Task" --where '["!=",["workflow/state","workflow/Final"],true]' --all --json
+fibery query --db "GitLab/Merge Request" --select "gitlab/name" --all --json
 
 # Search by name within a database
 fibery search "webhook" --db "Support platform/Support ticket"
@@ -112,6 +126,11 @@ All write commands accept UUID, `DT-42`, or just `42` as the entity reference.
 ```bash
 # Create entity (enum/user fields resolved by name automatically)
 fibery create "Development/Dev Task" "Development/Name=Fix login bug" "Development/Priority=High"
+
+# Forgiving writes: skip values that don't resolve, or create missing enum values on the fly
+fibery create "Development/Dev Task" "Development/Name=x" "Development/Priority=Brand New" --create-missing-enum
+fibery create "Development/Dev Task" "Development/Name=x" "Development/Priority=??" --skip-invalid
+# (both flags also work on update and import; unknown field names get a "did you mean ...?" hint)
 
 # Create with inline document content
 fibery create "Development/Dev Task" "Development/Name=Fix login" \
@@ -156,7 +175,35 @@ fibery doc set <document-secret> "# Title\n\nContent here"
 # Read/write by entity UUID (secret fetched automatically)
 fibery doc get <uuid> --db "Development/Dev Task" --field "Development/Description"
 fibery doc set <uuid> "# Title\n\nContent" --db "Development/Dev Task" --field "Development/Description"
+
+# Append instead of replacing
+fibery doc append <uuid> "## More\n\ntext" --db "Development/Dev Task" --field "Development/Description"
+
+# Force secret mode when a raw secret is UUID-shaped (otherwise read as an entity id)
+fibery doc get <uuid-shaped-secret> --secret
 ```
+
+#### Space / wiki documents
+
+Left-nav space documents are not entities; the CLI reaches them through Fibery's
+(undocumented) views API, by URL or public id.
+
+```bash
+# List space documents (optionally one space)
+fibery docs list
+fibery docs list --space Development --limit 50
+
+# Read / write / append by URL — resolve also prints the document secret
+fibery resolve "https://acme.fibery.io/Development/My-Doc-280"
+fibery resolve "https://acme.fibery.io/Development/My-Doc-280" --id-only   # → documentSecret
+fibery doc get    "https://acme.fibery.io/Development/My-Doc-280"
+fibery doc set    "https://acme.fibery.io/Development/My-Doc-280" "# New body"
+fibery doc append "https://acme.fibery.io/Development/My-Doc-280" "appended line"
+```
+
+> Writes round-trip through Fibery's markdown normalizer, which strips trailing-whitespace
+> hard line breaks (cosmetic — content is preserved). The views endpoint is undocumented
+> and may change.
 
 You can also get a document secret manually via FQL:
 
@@ -228,6 +275,14 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--fields a,b,c` | (get/resolve/list) Return only these field aliases — saves tokens |
 | `--id-only` | (get/resolve/create) Print only the fibery/id UUID |
 | `--yes` | (delete/exec) Confirm destructive operation — required |
+| `--where '<json>'` | (list/query/count) FQL where-clause as JSON |
+| `--all` | (list/query) Return every matching row, paging past the 3001-row cap |
+| `--select a,b` | (query builder) Field names to select |
+| `--order <field>` | (query builder) Sort field (`-created`, `-modified`, or any field) |
+| `--secret` | (doc get/set/append) Treat the argument as a raw document secret |
+| `--space <name>` | (docs list) Filter to one space |
+| `--skip-invalid` | (create/update) Skip fields/values that don't resolve |
+| `--create-missing-enum` | (create/update/import) Create absent enum values by name |
 
 ## Notes
 
@@ -235,7 +290,10 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 - `fibery get` returns exit 1 when an entity is not found (not silent success)
 - `fibery state` looks up state UUIDs automatically — just use the state name
 - `fibery search` without `--db` in non-TTY mode lists all available databases
-- `fibery create` / `fibery update` / `fibery import` resolve enum values and user emails by name automatically
+- `fibery create` / `fibery update` / `fibery import` resolve enum values and user emails by name automatically; unknown field names get a "did you mean …?" hint, and `--skip-invalid` / `--create-missing-enum` make bulk writes forgiving
+- `fibery count` counts server-side, falling back to id-paging on databases that reject aggregates (row-level permissions)
+- `fibery list` / `fibery query` accept `--all` to stream every matching row past Fibery's 3001-row query cap
+- `fibery resolve`, `fibery doc get/set/append`, and `fibery docs list` reach space/wiki documents (left-nav pages) via the views API
 - Field names are case-insensitive: `Development/name` auto-corrects to `Development/Name` (canonical name from the cached schema)
 - `--doc "Field=...\n..."` interprets `\n`, `\t`, `\r`, `\\` escapes — use `\\` for a literal backslash
 - `fibery query` accepts both `$id` and `?id` param-reference styles — both normalize to `$id` before the call
