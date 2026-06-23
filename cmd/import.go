@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/langgerone/fibery-cli/internal/cache"
 	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -57,16 +57,16 @@ var importCmd = &cobra.Command{
 	Long: `Create multiple entities from a JSON array file. Each object becomes one entity.
 Enum and user fields are resolved by name (same as create).
 JSON arrays in field values are treated as collection (multi-select) fields.
-
-Limitations: document (rich-text) fields are not supported in import.
-Set them after import with: fibery doc set <uuid> "content" --db "..." --field "..."
+Document (rich-text) fields are set from their string value via the documents API
+after the entity is created — just provide the markdown inline.
 
 Example file (items.json):
   [
     {
       "Space/Name": "First item",
       "Space/Priority": "High",
-      "Space/Tags": ["Backend", "API"]
+      "Space/Tags": ["Backend", "API"],
+      "Space/Description": "# Summary\n\nMarkdown body for the doc field."
     },
     {
       "Space/Name": "Second item",
@@ -113,7 +113,14 @@ Usage:
 
 			opts := resolveOpts{createMissingEnum: importMakeEnum}
 			maps.Copy(entity, passthroughFields)
+			// Document (rich-text) fields can't be set in create — collect their
+			// markdown strings and write them via the documents API post-create.
+			docFields := map[string]string{}
 			for k, strVal := range scalars {
+				if findFieldType(schema, importDB, k) == "Collaboration~Documents/Document" {
+					docFields[k] = strVal
+					continue
+				}
 				resolved, err := resolveFieldValueOpts(cmd.Context(), schema, importDB, k, strVal, opts)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "row %d field %q: %v\n", i+1, k, err)
@@ -172,6 +179,22 @@ Usage:
 					if err := addCollectionItems(cmd.Context(), importDB, createdID, col.field, items); err != nil {
 						fmt.Fprintf(os.Stderr, "row %d collection %q: %v\n", i+1, col.field, err)
 					}
+				}
+			}
+
+			// Write document (rich-text) fields via the documents API.
+			for field, content := range docFields {
+				if createdID == "" {
+					fmt.Fprintf(os.Stderr, "row %d: could not extract fibery/id; doc field %q skipped\n", i+1, field)
+					continue
+				}
+				secret, err := resolveDocSecretByID(cmd.Context(), importDB, createdID, field)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "row %d doc %q: %v\n", i+1, field, err)
+					continue
+				}
+				if err := cli.SetDocument(cmd.Context(), secret, content); err != nil {
+					fmt.Fprintf(os.Stderr, "row %d doc %q: set content: %v\n", i+1, field, err)
 				}
 			}
 

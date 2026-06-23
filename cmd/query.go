@@ -3,13 +3,14 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
 
-	"github.com/spf13/cobra"
 	"github.com/langgerone/fibery-cli/internal/cache"
 	"github.com/langgerone/fibery-cli/internal/client"
 	"github.com/langgerone/fibery-cli/internal/render"
+	"github.com/spf13/cobra"
 )
 
 // reFQLParamRef matches a bare "?identifier" string — what Fibery FQL natively
@@ -72,13 +73,14 @@ func parseWhereClause(s string) (any, error) {
 }
 
 var (
-	queryParams string
-	queryDB     string
-	querySelect []string
-	queryWhere  string
-	queryLimit  int
-	queryOrder  string
-	queryAll    bool
+	queryParams  string
+	queryDB      string
+	querySelect  []string
+	queryWhere   string
+	queryFilters []string
+	queryLimit   int
+	queryOrder   string
+	queryAll     bool
 )
 
 var queryCmd = &cobra.Command{
@@ -99,7 +101,7 @@ Param references may use "$id" (CLI style) or "?id" (native FQL) — both normal
 --all pages with q/offset to return every matching row.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		query, err := buildQuery(args)
+		query, extraParams, err := buildQuery(args)
 		if err != nil {
 			return err
 		}
@@ -110,6 +112,12 @@ Param references may use "$id" (CLI style) or "?id" (native FQL) — both normal
 				return fmt.Errorf("invalid --params JSON: %w", err)
 			}
 			params = normalizeFQLParams(params)
+		}
+		if len(extraParams) > 0 {
+			if params == nil {
+				params = map[string]any{}
+			}
+			maps.Copy(params, extraParams)
 		}
 
 		var result json.RawMessage
@@ -138,22 +146,23 @@ Param references may use "$id" (CLI style) or "?id" (native FQL) — both normal
 	},
 }
 
-// buildQuery returns the FQL query object, either from a positional JSON argument
-// or assembled from the builder flags (--db/--select/--where/--limit/--order).
-func buildQuery(args []string) (any, error) {
+// buildQuery returns the FQL query object (from a positional JSON argument or
+// assembled from the builder flags) plus any params it generated (--filter emits
+// $flt* params that must travel alongside the query).
+func buildQuery(args []string) (any, map[string]any, error) {
 	if len(args) == 1 {
 		if queryDB != "" {
-			return nil, fmt.Errorf("pass either a JSON query OR the --db builder flags, not both")
+			return nil, nil, fmt.Errorf("pass either a JSON query OR the --db builder flags, not both")
 		}
 		var q any
 		if err := json.Unmarshal([]byte(args[0]), &q); err != nil {
-			return nil, fmt.Errorf("invalid JSON query: %w", err)
+			return nil, nil, fmt.Errorf("invalid JSON query: %w", err)
 		}
-		return normalizeFQLQuery(q), nil
+		return normalizeFQLQuery(q), nil, nil
 	}
 
 	if queryDB == "" {
-		return nil, fmt.Errorf("provide a JSON query, or use --db (with optional --select/--where/--limit/--order)")
+		return nil, nil, fmt.Errorf("provide a JSON query, or use --db (with optional --select/--where/--filter/--limit/--order)")
 	}
 
 	schema, _ := cache.LoadSchema(account)
@@ -170,10 +179,21 @@ func buildQuery(args []string) (any, error) {
 		q["q/select"] = buildSelect(schema, queryDB)
 	}
 
-	if queryWhere != "" {
+	var extraParams map[string]any
+	if len(queryFilters) > 0 {
+		if queryWhere != "" {
+			return nil, nil, fmt.Errorf("use either --where or --filter, not both")
+		}
+		clause, fparams, ferr := buildFilterClause(schema, queryDB, queryFilters)
+		if ferr != nil {
+			return nil, nil, ferr
+		}
+		q["q/where"] = clause
+		extraParams = fparams
+	} else if queryWhere != "" {
 		clause, err := parseWhereClause(queryWhere)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		q["q/where"] = clause
 	}
@@ -190,7 +210,7 @@ func buildQuery(args []string) (any, error) {
 	if !queryAll {
 		q["q/limit"] = queryLimit
 	}
-	return q, nil
+	return q, extraParams, nil
 }
 
 func init() {
@@ -198,6 +218,7 @@ func init() {
 	queryCmd.Flags().StringVar(&queryDB, "db", "", "database name (builder mode — assembles the FQL for you)")
 	queryCmd.Flags().StringSliceVar(&querySelect, "select", nil, "comma-separated field names to select (builder mode)")
 	queryCmd.Flags().StringVar(&queryWhere, "where", "", "FQL where-clause as JSON (builder mode)")
+	queryCmd.Flags().StringArrayVar(&queryFilters, "filter", nil, `simple filter "field=value" (builder mode; repeatable; ops: = != ~)`)
 	queryCmd.Flags().IntVar(&queryLimit, "limit", 50, "max results (builder mode; ignored with --all)")
 	queryCmd.Flags().StringVar(&queryOrder, "order", "", `sort field: "created", "modified", "-created", or any field name (builder mode)`)
 	queryCmd.Flags().BoolVar(&queryAll, "all", false, "return every matching row, paging past the 3001-row cap")

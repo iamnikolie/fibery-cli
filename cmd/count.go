@@ -4,16 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
+	"github.com/langgerone/fibery-cli/internal/cache"
 	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/spf13/cobra"
 )
 
 var (
-	countWhere  string
-	countParams string
+	countWhere   string
+	countFilters []string
+	countParams  string
 )
 
 var countCmd = &cobra.Command{
@@ -27,25 +30,41 @@ aggregate queries).
 
 Examples:
   fibery count "Space/Database"
-  fibery count "Space/Database" --where '["=",["workflow/state","enum/name"],"$s"]' --params '{"$s":"Open"}'`,
+  fibery count "Space/Database" --where '["=",["workflow/state","enum/name"],"$s"]' --params '{"$s":"Open"}'
+  fibery count "Development/Dev Task" --filter "Development/Dev epic=2319"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		db := args[0]
 
-		var where any
-		if countWhere != "" {
-			clause, err := parseWhereClause(countWhere)
-			if err != nil {
-				return err
-			}
-			where = clause
-		}
 		var params map[string]any
 		if countParams != "" {
 			if err := json.Unmarshal([]byte(countParams), &params); err != nil {
 				return fmt.Errorf("invalid --params JSON: %w", err)
 			}
 			params = normalizeFQLParams(params)
+		}
+
+		var where any
+		if len(countFilters) > 0 {
+			if countWhere != "" {
+				return fmt.Errorf("use either --where or --filter, not both")
+			}
+			schema, _ := cache.LoadSchema(account)
+			clause, fparams, ferr := buildFilterClause(schema, db, countFilters)
+			if ferr != nil {
+				return ferr
+			}
+			where = clause
+			if params == nil {
+				params = map[string]any{}
+			}
+			maps.Copy(params, fparams)
+		} else if countWhere != "" {
+			clause, err := parseWhereClause(countWhere)
+			if err != nil {
+				return err
+			}
+			where = clause
 		}
 
 		n, err := countEntities(cmd.Context(), db, where, params)
@@ -119,6 +138,7 @@ func aggregateCountUnsupported(msg string) bool {
 
 func init() {
 	countCmd.Flags().StringVar(&countWhere, "where", "", "FQL where-clause as JSON")
+	countCmd.Flags().StringArrayVar(&countFilters, "filter", nil, `simple filter "field=value" (repeatable; ops: = != ~). e.g. --filter "Development/Dev epic=2319"`)
 	countCmd.Flags().StringVar(&countParams, "params", "", `query params as JSON, e.g. '{"$s":"Open"}'`)
 	rootCmd.AddCommand(countCmd)
 }

@@ -1,13 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/spf13/cobra"
 )
 
 var commentsCmd = &cobra.Command{
@@ -50,10 +51,11 @@ Example:
 						"Comments": map[string]any{
 							"q/from": "comments/comments",
 							"q/select": map[string]any{
-								"ID":      []any{"fibery/id"},
-								"Created": []any{"fibery/creation-date"},
-								"Author":  []any{"comment/author", "user/name"},
-								"Secret":  []any{"comment/document-secret"},
+								"ID":       []any{"fibery/id"},
+								"PublicID": []any{"fibery/public-id"},
+								"Created":  []any{"fibery/creation-date"},
+								"Author":   []any{"comment/author", "user/name"},
+								"Secret":   []any{"comment/document-secret"},
 							},
 							"q/order-by": []any{[]any{[]any{"fibery/creation-date"}, "q/asc"}},
 							"q/limit":    "q/no-limit",
@@ -106,6 +108,14 @@ Example:
 				}
 			}
 			fmt.Fprintf(os.Stdout, "## %s — %s\n\n", author, created)
+			// Comment id (and public id) so the comment can be targeted by
+			// `fibery comment edit/delete`.
+			id := asStr(cm["ID"])
+			if pid := asStr(cm["PublicID"]); pid != "" {
+				fmt.Fprintf(os.Stdout, "_id: %s · #%s_\n\n", id, pid)
+			} else {
+				fmt.Fprintf(os.Stdout, "_id: %s_\n\n", id)
+			}
 			if body == "" {
 				fmt.Fprintln(os.Stdout, "_(empty)_")
 			} else {
@@ -115,6 +125,36 @@ Example:
 		}
 		return nil
 	},
+}
+
+// resolveCommentSecret returns the document secret backing a comment, given the
+// comment's fibery/id. The secret is what /api/documents reads and writes, so it
+// is all that comment edit needs — the host entity is irrelevant.
+func resolveCommentSecret(ctx context.Context, commentID string) (string, error) {
+	raw, err := cli.One(ctx, client.Command{
+		Command: "fibery.entity/query",
+		Args: map[string]any{
+			"query": map[string]any{
+				"q/from":   "comments/comment",
+				"q/select": map[string]any{"secret": []any{"comment/document-secret"}},
+				"q/where":  []any{"=", []any{"fibery/id"}, "$id"},
+				"q/limit":  1,
+			},
+			"params": map[string]any{"$id": commentID},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("query comment secret: %w", err)
+	}
+	var items []map[string]any
+	if jErr := json.Unmarshal(raw, &items); jErr != nil || len(items) == 0 {
+		return "", fmt.Errorf("comment %s not found", commentID)
+	}
+	secret := asStr(items[0]["secret"])
+	if secret == "" {
+		return "", fmt.Errorf("comment %s has no document secret", commentID)
+	}
+	return secret, nil
 }
 
 func init() {

@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/langgerone/fibery-cli/internal/cache"
 	"github.com/langgerone/fibery-cli/internal/client"
 	"github.com/langgerone/fibery-cli/internal/render"
+	"github.com/spf13/cobra"
 )
 
 // countJSONArray returns the length of a top-level JSON array, or 0 if the
@@ -33,12 +34,13 @@ func paginationHint(w io.Writer, raw json.RawMessage, limit int) {
 }
 
 var (
-	listLimit  int
-	listSort   string
-	listFields []string
-	listWhere  string
-	listAll    bool
-	listParams string
+	listLimit   int
+	listSort    string
+	listFields  []string
+	listWhere   string
+	listFilters []string
+	listAll     bool
+	listParams  string
 )
 
 var sortAliases = map[string]string{
@@ -67,7 +69,13 @@ var listCmd = &cobra.Command{
 Examples:
   fibery list "Space/Database"
   fibery list "Space/Database" --limit 100 --sort -modified
-  fibery list "Space/Database" --sort "Space/Priority"`,
+  fibery list "Space/Database" --sort "Space/Priority"
+
+  # --filter builds the where-clause for you (no FQL). Repeatable; ANDed.
+  # Children of an epic (relation matched by public id):
+  fibery list "Development/Dev Task" --filter "Development/Dev epic=2319"
+  # Combine: tasks in an epic that are not yet done (enum matched by name)
+  fibery list "Development/Dev Task" --filter "Development/Dev epic=2319" --filter "workflow/state!=Done"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		db := args[0]
@@ -107,13 +115,6 @@ Examples:
 			"q/select":   sel,
 			"q/order-by": []any{[]any{[]any{sortField}, dir}},
 		}
-		if listWhere != "" {
-			clause, werr := parseWhereClause(listWhere)
-			if werr != nil {
-				return werr
-			}
-			query["q/where"] = clause
-		}
 
 		var params map[string]any
 		if listParams != "" {
@@ -121,6 +122,27 @@ Examples:
 				return fmt.Errorf("invalid --params JSON: %w", perr)
 			}
 			params = normalizeFQLParams(params)
+		}
+
+		if len(listFilters) > 0 {
+			if listWhere != "" {
+				return fmt.Errorf("use either --where or --filter, not both")
+			}
+			clause, fparams, ferr := buildFilterClause(schema, db, listFilters)
+			if ferr != nil {
+				return ferr
+			}
+			query["q/where"] = clause
+			if params == nil {
+				params = map[string]any{}
+			}
+			maps.Copy(params, fparams)
+		} else if listWhere != "" {
+			clause, werr := parseWhereClause(listWhere)
+			if werr != nil {
+				return werr
+			}
+			query["q/where"] = clause
 		}
 
 		var result json.RawMessage
@@ -155,6 +177,7 @@ func init() {
 	listCmd.Flags().StringVar(&listSort, "sort", "-created", `sort field: "created", "modified", "-created", "-modified", or any Fibery field name`)
 	listCmd.Flags().StringSliceVar(&listFields, "fields", nil, "comma-separated field aliases to return (e.g. \"Name,State,Priority\")")
 	listCmd.Flags().StringVar(&listWhere, "where", "", "FQL where-clause as JSON (e.g. '[\"=\",[\"workflow/state\",\"enum/name\"],\"$s\"]')")
+	listCmd.Flags().StringArrayVar(&listFilters, "filter", nil, `simple filter "field=value" (repeatable; ops: = != ~). Relations match by public id, enums by name, users by email. e.g. --filter "Development/Dev epic=2319"`)
 	listCmd.Flags().StringVar(&listParams, "params", "", `query params as JSON for --where, e.g. '{"$s":"Open"}'`)
 	listCmd.Flags().BoolVar(&listAll, "all", false, "return every matching row, paging past the 3001-row cap")
 	rootCmd.AddCommand(listCmd)

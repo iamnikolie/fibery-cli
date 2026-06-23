@@ -10,9 +10,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/spf13/cobra"
 	"github.com/langgerone/fibery-cli/internal/cache"
 	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -445,10 +445,10 @@ var primitiveFieldTypes = map[string]bool{
 
 // fieldAliasMap maps technical field names to human-readable aliases.
 var fieldAliasMap = map[string]string{
-	"fibery/public-id":    "ID",
-	"fibery/creation-date": "Created",
-	"fibery/created-by":   "Created By",
-	"workflow/state":      "State",
+	"fibery/public-id":      "ID",
+	"fibery/creation-date":  "Created",
+	"fibery/created-by":     "Created By",
+	"workflow/state":        "State",
 	"assignments/assignees": "Assignees",
 }
 
@@ -573,6 +573,9 @@ func printEntityLLMFull(ctx context.Context, raw json.RawMessage, db string, doc
 		fmt.Fprintf(os.Stdout, "# %s\n\n", strings.TrimSpace(name))
 	}
 	fmt.Fprintf(os.Stdout, "**Database:** %s\n", db)
+	if pid := asStr(entity["Public ID"]); pid != "" && cfg != nil {
+		fmt.Fprintf(os.Stdout, "**URL:** %s\n", buildEntityURL(cfg.BaseURL(), db, pid, asStr(entity["Name"])))
+	}
 
 	// Field display order
 	priorityOrder := []string{"Public ID", "State", "Priority", "Created", "Created By"}

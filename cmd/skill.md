@@ -32,19 +32,22 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | Command | Description | Key flags |
 |---------|-------------|-----------|
 | `fibery search <text>` | Find entities by name | `--db`, `--limit` (default 20) |
-| `fibery get <id>` | Fetch one entity by public ID, prefixed ID, or UUID — shows all fields | `--db` (required), `--id-only`, `--fields` |
-| `fibery resolve <url>` | Fetch entity OR space/wiki document by Fibery URL | `--id-only`, `--fields` |
-| `fibery list <database>` | List entities in a database | `--limit` (default 50), `--sort`, `--fields`, `--where`, `--params`, `--all` |
-| `fibery query [json]` | FQL query — raw JSON, or built from flags | `--params`, `--db`, `--select`, `--where`, `--limit`, `--order`, `--all` |
-| `fibery count <database>` | Count entities (server aggregate, falls back to paging) | `--where`, `--params` |
-| `fibery create <db> [field=value...]` | Create entity; repeat field for multi-select | `--doc "Field=content"`, `--id-only`, `--skip-invalid`, `--create-missing-enum` |
-| `fibery update <id> [field=value...]` | Update entity; repeat field to append to multi-select | `--db` (required), `--doc`, `--skip-invalid`, `--create-missing-enum` |
+| `fibery get <id>` | Fetch one entity by public ID, prefixed ID, or UUID — shows all fields (incl. URL) | `--db` (required), `--id-only`, `--fields` |
+| `fibery resolve <url>` | Fetch entity OR space/wiki document by Fibery URL (output includes URL) | `--id-only`, `--fields` |
+| `fibery url <id>` | Print the canonical web URL for an entity (paste into comments/docs/Slack) | `--db` (required) |
+| `fibery list <database>` | List entities in a database | `--limit` (default 50), `--sort`, `--fields`, `--filter`, `--where`, `--params`, `--all` |
+| `fibery query [json]` | FQL query — raw JSON, or built from flags | `--params`, `--db`, `--select`, `--filter`, `--where`, `--limit`, `--order`, `--all` |
+| `fibery count <database>` | Count entities (server aggregate, falls back to paging) | `--filter`, `--where`, `--params` |
+| `fibery create <db> [field=value...]` | Create entity; repeat field for multi-select. Prints public ID + URL | `--doc "Field=content"`, `--doc-file "Field=path.md"`, `--id-only`, `--public-id`, `--skip-invalid`, `--create-missing-enum` |
+| `fibery update <id> [field=value...]` | Update entity; repeat field to append to multi-select | `--db` (required), `--doc`, `--doc-file`, `--skip-invalid`, `--create-missing-enum` |
 | `fibery delete <id>` | Delete entity (requires `--yes`) | `--db` (required), `--yes` (required) |
 | `fibery exec <json>` | Send any raw Fibery command; destructive ones require `--yes` | `--yes` (for delete/remove/drop) |
 | `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required), `--create-missing-enum` |
 | `fibery state <id> <state-name>` | Set workflow state (case-insensitive) | `--db` (required) |
 | `fibery comment <url-or-id> [text]` | Add comment; optionally @mention users, reference entities, or reply | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>` |
-| `fibery comments list <id>` | List all comments on an entity with author, date, and markdown body | `--db` (required) |
+| `fibery comment edit <comment-id> <text>` | Replace a comment's body (host entity inferred) | — |
+| `fibery comment delete <comment-id>` | Delete a comment (host entity inferred) | `--yes` (required) |
+| `fibery comments list <id>` | List comments on an entity with author, date, comment id, and markdown body | `--db` (required) |
 | `fibery doc get <secret\|id\|url>` | Get document as Markdown | `--db`, `--field` (entity ID), `--secret` (raw UUID secret) |
 | `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
 | `fibery doc append <secret\|id\|url> <md>` | Append Markdown to a document | `--db`, `--field`, `--secret` |
@@ -72,13 +75,17 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 
 ## ID formats
 
-All entity commands (`get`, `update`, `state`, `comment`, `comments list`, `delete`, `doc`) accept:
+All entity commands (`get`, `update`, `state`, `comment`, `comments list`, `delete`, `doc`, `url`) accept:
 - UUID: `550e8400-e29b-41d4-a716-446655440000`
 - Public ID: `42`
 - Prefixed public ID: `DT-42` (prefix is stripped automatically)
 
 The CLI resolves public IDs to UUIDs internally via a one-shot FQL lookup, so
 no separate `get --id-only` round-trip is needed.
+
+`comment edit`/`comment delete` take a comment id (the UUID or public id shown by
+`comments list`). Comments live in the system database `comments/comment` — you
+rarely need that name, but `fibery schema show comments/comment` works if you do.
 
 ## Enum and user field resolution
 
@@ -98,10 +105,70 @@ Forgiving flags for `create`/`update`/`import`:
 - `--skip-invalid` — skip a field/value that doesn't resolve instead of failing the whole call.
 - `--create-missing-enum` — create an absent enum value (by name) and assign it, instead of erroring.
 
-## --doc escape sequences
+## Document (rich-text) fields
 
-`--doc "Field=line1\nline2"` interprets `\n`, `\t`, `\r`, and `\\` in content.
-Use `\\` to keep a literal backslash. To pass a file: `--doc "Field=$(cat f.md)"`.
+`create` and `update` set document fields two ways:
+
+```bash
+# Inline — interprets \n, \t, \r, \\ escapes (use \\ for a literal backslash)
+fibery create "Development/Dev Task" "Development/Name=x" \
+  --doc "Development/Description=# Heading\n\nbody"
+
+# From a file — no escaping, real newlines preserved. Best for long markdown.
+fibery create "Development/Dev Task" "Development/Name=x" \
+  --doc-file "Development/Description=./body.md"
+
+fibery update DT-42 --db "Development/Dev Task" \
+  --doc-file "Development/Description=./body.md"
+```
+
+`--doc` and `--doc-file` are both repeatable and may be combined (different fields).
+
+## Simple filters with --filter (no FQL)
+
+`list`, `count`, and `query` (builder mode) accept `--filter "field=value"` — a
+schema-aware shorthand that builds the where-clause for you, so the common
+"entities by a relation/field value" query needs no hand-written FQL. Repeatable;
+multiple filters are ANDed. Mutually exclusive with `--where`.
+
+Operators: `=` (equals), `!=` (not equals), `~` (contains, case-insensitive).
+
+Value matching is derived from the field's schema type:
+- **relation** (link to another database) → matches the related entity's **public id**
+- **enum / workflow state** → matches the value **name**
+- **user** → matches the **email**
+- **primitive** (text/number/date/bool) → matches the value directly
+
+```bash
+# Children of an epic — the single most common query, now one flag:
+fibery list "Development/Dev Task" --filter "Development/Dev epic=2319"
+
+# Combine filters (ANDed): tasks in an epic that aren't done yet
+fibery list "Development/Dev Task" \
+  --filter "Development/Dev epic=2319" --filter "workflow/state!=Done"
+
+# Count them
+fibery count "Development/Dev Task" --filter "Development/Dev epic=2319"
+
+# Contains match on a text field
+fibery list "Development/Dev Task" --filter "Development/Name~login"
+```
+
+Use full field names (as in `fibery schema show <db>`), e.g. `workflow/state`,
+not the short alias `State`. For matching a relation by *name* (not public id),
+operators beyond `= != ~`, or OR logic, drop to raw `--where`.
+
+## Entity URLs
+
+```bash
+# Canonical URL for pasting into comments, docs, or Slack
+fibery url 5651 --db "Development/Dev Task"
+fibery url DT-5651 --db "Development/Dev Task"
+```
+
+`get` and `resolve` also print a `**URL:**` line in their detail output, and
+`create --json` includes a `url` field. Fibery resolves entities by the trailing
+public id, so the title slug in the URL is cosmetic.
 
 ## FQL param prefix
 
@@ -117,10 +184,20 @@ Every read command that returns an entity exposes `--id-only` for scripting:
 TICKET_UUID=$(fibery resolve https://x.fibery.io/Dev/Bug-42 --id-only)
 TICKET_UUID=$(fibery get 42 --db "Development/Dev Task" --id-only)
 NEW_ID=$(fibery create "Development/Dev Task" "Development/Name=hi" --id-only)
+NEW_PID=$(fibery create "Development/Dev Task" "Development/Name=hi" --public-id)
 ```
 
-Plain `--json` output always includes `fibery/id` too if you need more fields
-alongside the UUID.
+`create` (without `--id-only`/`--public-id`) prints the public id and the entity
+URL, so there is no second `fibery get` round-trip to learn the new ticket's id:
+
+```
+Created 019ef392-…
+Public ID: 5659
+URL: https://acme.fibery.io/Development/Dev_Task/hi-5659
+```
+
+Plain `--json` output always includes `fibery/id`; on `create` it also carries
+`fibery/public-id` and `url`.
 
 ## Token-efficient reads with --fields
 
@@ -167,6 +244,17 @@ fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
 # Combine — flags are repeatable; body is optional when a --mention/--ref is given
 fibery comment 42 --db "Development/Dev Task" "see context" \
   --mention dev@acme.com --ref DT-99 --reply-to 36129
+```
+
+### Edit / delete a comment
+
+`fibery comments list` prints each comment's id (`_id: <uuid> · #<public-id>_`).
+Pass either form to edit or delete — the host entity is inferred, so no `--db`:
+
+```bash
+fibery comment edit 36129 "corrected text"          # replace the body
+fibery comment edit <comment-uuid> "corrected text"
+fibery comment delete 36129 --yes                    # --yes required (irreversible)
 ```
 
 `--mention` and `--ref` both render as Fibery mention nodes via the
@@ -266,10 +354,13 @@ fibery state $ID "In Progress" --db "Development/Dev Task"
 fibery delete <uuid> --db "Development/Dev Task"
 ```
 
-**Bulk import from JSON (with collection fields):**
+**Bulk import from JSON (collection + document fields):**
 ```bash
-# items.json:
-# [{"Development/Name":"Task A","Development/Priority":"High","Development/Tags":["Backend","API"]}]
+# items.json — JSON arrays become multi-select fields; a string on a rich-text
+# field becomes its document body (set via the documents API post-create):
+# [{"Development/Name":"Task A","Development/Priority":"High",
+#   "Development/Tags":["Backend","API"],
+#   "Development/Description":"# Summary\n\nMarkdown body."}]
 fibery import --db "Development/Dev Task" --file items.json
 ```
 
@@ -422,13 +513,6 @@ fibery exec '{"command":"fibery.entity/remove-collection-items","args":{"type":"
 
 # Add new tag:
 fibery exec '{"command":"fibery.entity/add-collection-items","args":{"type":"Development/Dev Task","field":"Development/Tags","entity":{"fibery/id":"<entity-uuid>"},"items":[{"fibery/id":"<new-tag-uuid>"}]}}'
-```
-
-### Document fields in import
-
-`fibery import` does not support document/rich-text fields. Set them after bulk import:
-```bash
-fibery doc set <uuid> "# Content" --db "Development/Dev Task" --field "Development/Description"
 ```
 
 ### Single entity references

@@ -95,9 +95,18 @@ fibery query --db "Development/Dev Task" \
 fibery count "Development/Dev Task"
 fibery count "Development/Dev Task" --where '["=",["workflow/state","enum/name"],"$s"]' --params '{"$s":"Open"}'
 
+# --filter builds the where-clause for you (no FQL). Repeatable; ANDed.
+# Relations match by public id, enums by name, users by email, primitives directly.
+fibery list "Development/Dev Task" --filter "Development/Dev epic=2319"
+fibery list "Development/Dev Task" --filter "Development/Dev epic=2319" --filter "workflow/state!=Done"
+fibery count "Development/Dev Task" --filter "Development/Dev epic=2319"
+
 # --all returns every matching row, paging past Fibery's 3001-row cap (list and query)
 fibery list "Development/Dev Task" --where '["!=",["workflow/state","workflow/Final"],true]' --all --json
 fibery query --db "GitLab/Merge Request" --select "gitlab/name" --all --json
+
+# Canonical web URL for an entity (paste into comments/docs/Slack)
+fibery url 5651 --db "Development/Dev Task"
 
 # Search by name within a database
 fibery search "webhook" --db "Support platform/Support ticket"
@@ -132,9 +141,19 @@ fibery create "Development/Dev Task" "Development/Name=x" "Development/Priority=
 fibery create "Development/Dev Task" "Development/Name=x" "Development/Priority=??" --skip-invalid
 # (both flags also work on update and import; unknown field names get a "did you mean ...?" hint)
 
+# create prints the new entity's public id and URL (no second `get` needed):
+#   Created 019ef392-…
+#   Public ID: 5659
+#   URL: https://acme.fibery.io/Development/Dev_Task/Fix-login-5659
+# --public-id prints just the public id; --json adds fibery/public-id + url.
+
 # Create with inline document content
 fibery create "Development/Dev Task" "Development/Name=Fix login" \
   --doc "Development/Description=# Summary\n\nDetailed description here"
+
+# Create with a document field from a file (no \n escaping; better for long markdown)
+fibery create "Development/Dev Task" "Development/Name=Fix login" \
+  --doc-file "Development/Description=./body.md"
 
 # Update fields — public ID works too
 fibery update 42 --db "Development/Dev Task" \
@@ -151,14 +170,20 @@ fibery comment 42 --db "Development/Dev Task" "please review" --mention dev@acme
 fibery comment 42 --db "Development/Dev Task" "dup of" --ref DT-99
 fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
 
-# Read all comments on an entity (oldest first, markdown bodies)
+# Read all comments on an entity (oldest first, markdown bodies + comment ids)
 fibery comments list 42 --db "Development/Dev Task"
+
+# Edit / delete a comment by its id (UUID or public id from `comments list`).
+# Host entity is inferred — no --db.
+fibery comment edit 36129 "corrected text"
+fibery comment delete 36129 --yes
 
 # Delete entity — requires --yes
 fibery delete 42 --db "Development/Dev Task" --yes
 
-# Bulk create from JSON array file (enum/user fields resolved by name)
-# items.json: [{"Development/Name":"Task A","Development/Priority":"High"}, ...]
+# Bulk create from JSON array file (enum/user fields by name; arrays → multi-select;
+# a string on a rich-text field becomes its document body)
+# items.json: [{"Development/Name":"Task A","Development/Priority":"High","Development/Description":"# Body"}, ...]
 fibery import --db "Development/Dev Task" --file items.json
 
 # Send any raw Fibery command — destructive ones (delete/remove/drop) require --yes
@@ -274,8 +299,11 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--absolute` | (inbox) Print absolute timestamps instead of relative "5h ago" |
 | `--fields a,b,c` | (get/resolve/list) Return only these field aliases — saves tokens |
 | `--id-only` | (get/resolve/create) Print only the fibery/id UUID |
-| `--yes` | (delete/exec) Confirm destructive operation — required |
+| `--public-id` | (create) Print only the public id of the created entity |
+| `--yes` | (delete/exec/comment delete) Confirm destructive operation — required |
+| `--filter 'field=value'` | (list/query/count) Simple schema-aware filter (repeatable; ops `= != ~`); builds the where-clause for you |
 | `--where '<json>'` | (list/query/count) FQL where-clause as JSON |
+| `--doc-file 'Field=path.md'` | (create/update) Set a document field from a file (repeatable) |
 | `--all` | (list/query) Return every matching row, paging past the 3001-row cap |
 | `--select a,b` | (query builder) Field names to select |
 | `--order <field>` | (query builder) Sort field (`-created`, `-modified`, or any field) |
@@ -293,6 +321,11 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 - `fibery create` / `fibery update` / `fibery import` resolve enum values and user emails by name automatically; unknown field names get a "did you mean …?" hint, and `--skip-invalid` / `--create-missing-enum` make bulk writes forgiving
 - `fibery count` counts server-side, falling back to id-paging on databases that reject aggregates (row-level permissions)
 - `fibery list` / `fibery query` accept `--all` to stream every matching row past Fibery's 3001-row query cap
+- `fibery list` / `fibery query` / `fibery count` accept `--filter "field=value"` (repeatable, ANDed) to build the where-clause without FQL — relations match by public id, enums by name, users by email; mutually exclusive with `--where`
+- `fibery create` prints the new entity's public id and URL by default (or `--public-id` for just the id); `--json` adds `fibery/public-id` and `url`
+- `fibery url <id> --db ...` prints an entity's canonical web URL; `get` / `resolve` detail output includes a URL line
+- `fibery comment edit/delete <comment-id>` edit or remove a comment by the id shown in `comments list` (host entity inferred; `delete` needs `--yes`)
+- `fibery create` / `fibery update` accept `--doc-file "Field=path.md"` to load a document field from a file; `fibery import` sets rich-text fields from their string value
 - `fibery resolve`, `fibery doc get/set/append`, and `fibery docs list` reach space/wiki documents (left-nav pages) via the views API
 - Field names are case-insensitive: `Development/name` auto-corrects to `Development/Name` (canonical name from the cached schema)
 - `--doc "Field=...\n..."` interprets `\n`, `\t`, `\r`, `\\` escapes — use `\\` for a literal backslash

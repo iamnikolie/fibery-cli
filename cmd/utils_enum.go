@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/langgerone/fibery-cli/internal/client"
@@ -18,6 +19,39 @@ func asStr(v any) string {
 		return s
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// docAssignment is a resolved rich-text field assignment ready to write to a document.
+type docAssignment struct {
+	field   string
+	content string
+}
+
+// collectDocFields parses --doc "Field=content" and --doc-file "Field=path" pairs
+// into resolved doc-field assignments. Field names are canonicalized against the
+// schema. Inline content has its \n/\t/\r escapes interpreted; file content is used
+// verbatim (no escape processing — the file already holds real newlines).
+func collectDocFields(schema map[string]any, db string, inline, files []string) ([]docAssignment, error) {
+	var out []docAssignment
+	for _, pair := range inline {
+		field, content, ok := strings.Cut(pair, "=")
+		if !ok {
+			return nil, fmt.Errorf("--doc: invalid Field=content pair: %q", pair)
+		}
+		out = append(out, docAssignment{resolveFieldName(schema, db, field), unescapeDocContent(content)})
+	}
+	for _, pair := range files {
+		field, path, ok := strings.Cut(pair, "=")
+		if !ok {
+			return nil, fmt.Errorf("--doc-file: invalid Field=path pair: %q", pair)
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("--doc-file %q: %w", field, err)
+		}
+		out = append(out, docAssignment{resolveFieldName(schema, db, field), string(b)})
+	}
+	return out, nil
 }
 
 // docEscaper interprets common backslash-escape sequences in --doc content so

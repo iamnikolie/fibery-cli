@@ -5,14 +5,15 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/langgerone/fibery-cli/internal/cache"
 	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/spf13/cobra"
 )
 
 var (
 	updateDB          string
 	updateDocFields   []string
+	updateDocFiles    []string
 	updateSkipInvalid bool
 	updateMakeEnum    bool
 )
@@ -129,28 +130,26 @@ Examples:
 			}
 		}
 
-		// Set document fields
-		for _, pair := range updateDocFields {
-			field, content, ok := strings.Cut(pair, "=")
-			if !ok {
-				return fmt.Errorf("--doc: invalid Field=content pair: %q", pair)
-			}
-			field = resolveFieldName(schema, updateDB, field)
-			secret, err := resolveDocSecretByID(cmd.Context(), updateDB, entityID, field)
+		// Set document fields (inline --doc and file-backed --doc-file)
+		docs, derr := collectDocFields(schema, updateDB, updateDocFields, updateDocFiles)
+		if derr != nil {
+			return derr
+		}
+		for _, d := range docs {
+			secret, err := resolveDocSecretByID(cmd.Context(), updateDB, entityID, d.field)
 			if err != nil {
-				return fmt.Errorf("--doc %q: %w", field, err)
+				return fmt.Errorf("doc %q: %w", d.field, err)
 			}
-			if err := cli.SetDocument(cmd.Context(), secret, unescapeDocContent(content)); err != nil {
-				return fmt.Errorf("--doc %q: set content: %w", field, err)
+			if err := cli.SetDocument(cmd.Context(), secret, d.content); err != nil {
+				return fmt.Errorf("doc %q: set content: %w", d.field, err)
 			}
 		}
 
 		// Echo what was updated
 		var parts []string
 		parts = append(parts, fieldOrder...)
-		for _, pair := range updateDocFields {
-			field, _, _ := strings.Cut(pair, "=")
-			parts = append(parts, field+" (doc)")
+		for _, d := range docs {
+			parts = append(parts, d.field+" (doc)")
 		}
 		if len(parts) > 0 {
 			fmt.Printf("Updated %d field(s): %s\n", len(parts), strings.Join(parts, ", "))
@@ -164,6 +163,7 @@ Examples:
 func init() {
 	updateCmd.Flags().StringVar(&updateDB, "db", "", "database name (e.g. \"Space/Database\")")
 	updateCmd.Flags().StringArrayVar(&updateDocFields, "doc", nil, `set document field: --doc "Space/Description=# Heading\n\ncontent"`)
+	updateCmd.Flags().StringArrayVar(&updateDocFiles, "doc-file", nil, `set document field from a file: --doc-file "Space/Description=path/to/body.md"`)
 	updateCmd.Flags().BoolVar(&updateSkipInvalid, "skip-invalid", false, "skip fields/values that don't resolve instead of failing the whole update")
 	updateCmd.Flags().BoolVar(&updateMakeEnum, "create-missing-enum", false, "create absent enum values by name instead of failing")
 	rootCmd.AddCommand(updateCmd)
