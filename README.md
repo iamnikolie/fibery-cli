@@ -117,6 +117,11 @@ fibery get 42 --db "Development/Dev Task"
 fibery get DT-42 --db "Development/Dev Task"
 fibery get 550e8400-e29b-41d4-a716-446655440000 --db "Development/Dev Task"
 
+# Rich-text bodies (Description etc.) are hidden by default to save tokens —
+# you get every scalar/relation field plus a hint naming the hidden docs.
+# Add --docs to include the bodies. Works on get and resolve.
+fibery get 42 --db "Development/Dev Task" --docs
+
 # Script-friendly UUID extraction — works on get, resolve, and create
 TICKET_UUID=$(fibery get 42 --db "Development/Dev Task" --id-only)
 TICKET_UUID=$(fibery resolve https://acme.fibery.io/Development/bug/Some-bug-3245 --id-only)
@@ -172,6 +177,12 @@ fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
 
 # Read all comments on an entity (oldest first, markdown bodies + comment ids)
 fibery comments list 42 --db "Development/Dev Task"
+
+# Incremental re-reads — bound the set so only the bodies you need are fetched.
+# --limit keeps the latest N (still oldest-first); --since takes RFC3339 or a
+# relative form (24h, 7d, 30m). They compose (--since first, then --limit).
+fibery comments list 42 --db "Development/Dev Task" --limit 3
+fibery comments list 42 --db "Development/Dev Task" --since 24h
 
 # Edit / delete a comment by its id (UUID or public id from `comments list`).
 # Host entity is inferred — no --db.
@@ -298,6 +309,8 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--hours` | Inbox lookback window in hours (default 48) |
 | `--absolute` | (inbox) Print absolute timestamps instead of relative "5h ago" |
 | `--fields a,b,c` | (get/resolve/list) Return only these field aliases — saves tokens |
+| `--docs` | (get/resolve) Include rich-text document bodies (hidden by default to save tokens) |
+| `--no-docs` | (get/resolve) Also drop document secret keys from `--json` (rendered bodies already hidden by default) |
 | `--id-only` | (get/resolve/create) Print only the fibery/id UUID |
 | `--public-id` | (create) Print only the public id of the created entity |
 | `--yes` | (delete/exec/comment delete) Confirm destructive operation — required |
@@ -333,6 +346,8 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 - `get`, `resolve`, and `create` all expose `--id-only` for `UUID=$(...)` scripting
 - `--json` output on `get` and `resolve` always carries `fibery/id` so scripts don't need a second FQL query
 - `--fields "Name,State"` on `get`/`resolve`/`list` saves significant tokens in agent loops
+- `get`/`resolve` hide rich-text bodies (Description etc.) by default — every scalar/relation field is shown plus a one-line hint naming the hidden docs; add `--docs` to include the bodies, or name a doc field in `--fields`. `--json` is unaffected (it only ever carried document secrets, not bodies)
+- `fibery comments list` accepts `--limit N` (latest N, oldest-first) and `--since <RFC3339|24h|7d|30m>` for incremental re-reads — bodies are fetched only for the comments actually returned
 - `fibery delete` and destructive `fibery exec` commands require `--yes` — no accidental data loss
 - `fibery list` and `fibery search` print a stderr signal when results hit `--limit`, so you know there may be more
 - Schema cache older than 7 days prints a stderr warning suggesting `fibery schema sync`

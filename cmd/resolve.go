@@ -18,6 +18,8 @@ import (
 var (
 	resolveIDOnly bool
 	resolveFields []string
+	resolveNoDocs bool
+	resolveDocs   bool
 )
 
 var resolveCmd = &cobra.Command{
@@ -92,13 +94,9 @@ Script-friendly (extract the UUID):
 		// Build a comprehensive select from schema covering all useful fields
 		schema, _ := cache.LoadSchema(account)
 		sel, docKeys := buildFullSelect(schema, db)
-		if len(resolveFields) > 0 {
-			filtered, err := filterSelectByAliases(sel, resolveFields, "fibery/id", "Public ID", "Name")
-			if err != nil {
-				return err
-			}
-			sel = filtered
-			docKeys = filterDocKeys(docKeys, sel)
+		sel, docKeys, errNarrow := narrowReadSelect(sel, docKeys, resolveFields, resolveNoDocs, "fibery/id", "Public ID", "Name")
+		if errNarrow != nil {
+			return errNarrow
 		}
 
 		result, err := cli.One(cmd.Context(), client.Command{
@@ -134,7 +132,9 @@ Script-friendly (extract the UUID):
 		if resolveIDOnly {
 			return printResolvedID(matched)
 		}
-		return printEntityLLMFull(cmd.Context(), matched, db, docKeys)
+		// Bodies shown only on explicit --docs, or when --fields named a doc field.
+		showDocs := resolveDocs || (len(resolveFields) > 0 && len(docKeys) > 0)
+		return printEntityLLMFull(cmd.Context(), matched, db, docKeys, showDocs)
 	},
 }
 
@@ -560,9 +560,25 @@ func isEnumLikeType(t string) bool {
 	return strings.Contains(after, "_")
 }
 
+// docsHiddenHint returns the one-line notice shown in place of suppressed
+// rich-text document bodies, naming the hidden fields and how to include them.
+// Empty when there are no document fields.
+func docsHiddenHint(docKeys []string) string {
+	if len(docKeys) == 0 {
+		return ""
+	}
+	labels := make([]string, len(docKeys))
+	for i, k := range docKeys {
+		labels[i] = strings.TrimPrefix(k, "_doc_")
+	}
+	return fmt.Sprintf("_Document fields hidden (%s) — re-run with --docs to include the bodies._", strings.Join(labels, ", "))
+}
+
 // printEntityLLMFull renders an entity with all fields in LLM-ready Markdown.
-// docKeys are keys in the entity whose values are document secrets to fetch and display.
-func printEntityLLMFull(ctx context.Context, raw json.RawMessage, db string, docKeys []string) error {
+// docKeys are keys in the entity whose values are document secrets. When showDocs
+// is true their bodies are fetched and appended; otherwise a one-line hint names
+// the hidden fields (bodies are the largest token sink, so they are off by default).
+func printEntityLLMFull(ctx context.Context, raw json.RawMessage, db string, docKeys []string, showDocs bool) error {
 	var entity map[string]any
 	if err := json.Unmarshal(raw, &entity); err != nil {
 		return err
@@ -648,7 +664,15 @@ func printEntityLLMFull(ctx context.Context, raw json.RawMessage, db string, doc
 		printField(k)
 	}
 
-	// Fetch and display document sections
+	// Document sections. The rich-text bodies are the single largest token sink,
+	// so by default they are suppressed and replaced with a one-line hint naming
+	// the hidden fields. --docs (or an explicit --fields naming a doc) opts in.
+	if !showDocs {
+		if hint := docsHiddenHint(docKeys); hint != "" {
+			fmt.Fprintf(os.Stdout, "\n%s\n", hint)
+		}
+		return nil
+	}
 	for _, key := range docKeys {
 		secret := asStr(entity[key])
 		if secret == "" {
@@ -809,5 +833,7 @@ func addCollectionItems(ctx context.Context, db, entityID, fieldName string, ite
 func init() {
 	resolveCmd.Flags().BoolVar(&resolveIDOnly, "id-only", false, "output only the fibery/id UUID (for scripting)")
 	resolveCmd.Flags().StringSliceVar(&resolveFields, "fields", nil, "comma-separated field aliases to return (saves tokens; e.g. \"Name,State,Priority\")")
+	resolveCmd.Flags().BoolVar(&resolveDocs, "docs", false, "include rich-text document bodies (Description etc.) — off by default to save tokens")
+	resolveCmd.Flags().BoolVar(&resolveNoDocs, "no-docs", false, "also drop document secret keys from --json (rendered bodies are already hidden by default)")
 	rootCmd.AddCommand(resolveCmd)
 }

@@ -162,6 +162,87 @@ func TestLooksLikeEntityRef(t *testing.T) {
 	assert.False(t, looksLikeEntityRef("hello world"))
 }
 
+func TestNarrowReadSelect_NoFlagsUnchanged(t *testing.T) {
+	sel := map[string]any{
+		"fibery/id":        []any{"fibery/id"},
+		"Name":             []any{"Space/Name"},
+		"_doc_Description": []any{"Space/Description", "Collaboration~Documents/secret"},
+	}
+	docKeys := []string{"_doc_Description"}
+	gotSel, gotDocs, err := narrowReadSelect(sel, docKeys, nil, false, "fibery/id")
+	assert.NoError(t, err)
+	assert.Equal(t, sel, gotSel)
+	assert.Equal(t, docKeys, gotDocs)
+}
+
+func TestNarrowReadSelect_NoDocsDropsDocKeys(t *testing.T) {
+	sel := map[string]any{
+		"fibery/id":        []any{"fibery/id"},
+		"Name":             []any{"Space/Name"},
+		"Priority":         []any{"Space/Priority", "enum/name"},
+		"_doc_Description": []any{"Space/Description", "Collaboration~Documents/secret"},
+		"_doc_Notes":       []any{"Space/Notes", "Collaboration~Documents/secret"},
+	}
+	docKeys := []string{"_doc_Description", "_doc_Notes"}
+	gotSel, gotDocs, err := narrowReadSelect(sel, docKeys, nil, true, "fibery/id")
+	assert.NoError(t, err)
+	assert.Empty(t, gotDocs, "--no-docs must clear the doc keys")
+	// Scalar/relation fields stay; only the rich-text bodies are gone.
+	assert.Contains(t, gotSel, "fibery/id")
+	assert.Contains(t, gotSel, "Name")
+	assert.Contains(t, gotSel, "Priority")
+	assert.NotContains(t, gotSel, "_doc_Description")
+	assert.NotContains(t, gotSel, "_doc_Notes")
+}
+
+func TestNarrowReadSelect_FieldsWinOverNoDocs(t *testing.T) {
+	// When --fields explicitly names a doc field, it survives even with --no-docs:
+	// fields fully determine the selection.
+	sel := map[string]any{
+		"fibery/id":        []any{"fibery/id"},
+		"Name":             []any{"Space/Name"},
+		"_doc_Description": []any{"Space/Description", "Collaboration~Documents/secret"},
+	}
+	docKeys := []string{"_doc_Description"}
+	gotSel, gotDocs, err := narrowReadSelect(sel, docKeys, []string{"Description"}, true, "fibery/id")
+	assert.NoError(t, err)
+	assert.Contains(t, gotSel, "_doc_Description")
+	assert.Equal(t, []string{"_doc_Description"}, gotDocs)
+}
+
+func TestNarrowReadSelect_FieldsFilterUnknownErrors(t *testing.T) {
+	sel := map[string]any{"Name": []any{"Space/Name"}}
+	_, _, err := narrowReadSelect(sel, nil, []string{"Nope"}, false)
+	assert.Error(t, err)
+}
+
+func TestDocsHiddenHint(t *testing.T) {
+	// No doc fields → no hint.
+	assert.Equal(t, "", docsHiddenHint(nil))
+	assert.Equal(t, "", docsHiddenHint([]string{}))
+
+	// Labels are the doc keys with the "_doc_" prefix stripped; mentions --docs.
+	hint := docsHiddenHint([]string{"_doc_Description", "_doc_Notes"})
+	assert.Contains(t, hint, "Description")
+	assert.Contains(t, hint, "Notes")
+	assert.Contains(t, hint, "--docs")
+	assert.NotContains(t, hint, "_doc_")
+	assert.NotContains(t, hint, "\n", "hint must stay on one line")
+}
+
+func TestNotFoundRefErr_NamesAcceptedFormats(t *testing.T) {
+	err := notFoundRefErr("PF-19", "Development/Dev Task")
+	msg := err.Error()
+	assert.Contains(t, msg, "PF-19")
+	assert.Contains(t, msg, "Development/Dev Task")
+	// One-line hint must name each accepted ID form.
+	assert.Contains(t, msg, "public id")
+	assert.Contains(t, msg, "DT-42")
+	assert.Contains(t, msg, "UUID")
+	assert.Contains(t, msg, "fibery resolve")
+	assert.NotContains(t, msg, "\n", "hint must stay on one line")
+}
+
 func TestBuildFullSelect_IncludesFiberyID(t *testing.T) {
 	// fibery/id is marked with fibery/id?: true in the schema, which causes the
 	// iteration to skip it. Make sure we still inject the UUID into the select.

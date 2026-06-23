@@ -32,8 +32,8 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | Command | Description | Key flags |
 |---------|-------------|-----------|
 | `fibery search <text>` | Find entities by name | `--db`, `--limit` (default 20) |
-| `fibery get <id>` | Fetch one entity by public ID, prefixed ID, or UUID — shows all fields (incl. URL) | `--db` (required), `--id-only`, `--fields` |
-| `fibery resolve <url>` | Fetch entity OR space/wiki document by Fibery URL (output includes URL) | `--id-only`, `--fields` |
+| `fibery get <id>` | Fetch one entity by public ID, prefixed ID, or UUID — all scalar/relation fields + URL; doc bodies hidden by default | `--db` (required), `--id-only`, `--fields`, `--docs`, `--no-docs` |
+| `fibery resolve <url>` | Fetch entity OR space/wiki document by Fibery URL — doc bodies hidden by default | `--id-only`, `--fields`, `--docs`, `--no-docs` |
 | `fibery url <id>` | Print the canonical web URL for an entity (paste into comments/docs/Slack) | `--db` (required) |
 | `fibery list <database>` | List entities in a database | `--limit` (default 50), `--sort`, `--fields`, `--filter`, `--where`, `--params`, `--all` |
 | `fibery query [json]` | FQL query — raw JSON, or built from flags | `--params`, `--db`, `--select`, `--filter`, `--where`, `--limit`, `--order`, `--all` |
@@ -47,7 +47,7 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery comment <url-or-id> [text]` | Add comment; optionally @mention users, reference entities, or reply | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>` |
 | `fibery comment edit <comment-id> <text>` | Replace a comment's body (host entity inferred) | — |
 | `fibery comment delete <comment-id>` | Delete a comment (host entity inferred) | `--yes` (required) |
-| `fibery comments list <id>` | List comments on an entity with author, date, comment id, and markdown body | `--db` (required) |
+| `fibery comments list <id>` | List comments on an entity with author, date, comment id, and markdown body | `--db` (required), `--limit` (latest N), `--since` (RFC3339\|24h\|7d) |
 | `fibery doc get <secret\|id\|url>` | Get document as Markdown | `--db`, `--field` (entity ID), `--secret` (raw UUID secret) |
 | `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
 | `fibery doc append <secret\|id\|url> <md>` | Append Markdown to a document | `--db`, `--field`, `--secret` |
@@ -214,15 +214,40 @@ fibery resolve <url> --fields "Name,State"
 The always-keep set (`fibery/id`, `Public ID`, `Name`) is preserved regardless,
 so the entity stays identifiable.
 
+Rich-text document bodies (`Description` etc.) are the single biggest token
+sink, so `get`/`resolve` **hide them by default** — you get every scalar and
+relation field plus a one-line hint naming the hidden doc fields. Add `--docs`
+when you actually need to read the body:
+
+```bash
+fibery get 42 --db "Development/Dev Task"            # fields only; bodies hidden
+fibery get 42 --db "Development/Dev Task" --docs     # include Description etc.
+fibery resolve <url> --docs
+```
+
+`--fields` still wins: naming a doc field in `--fields` returns its body even
+without `--docs`. `--json` is unaffected by this default — it never carried the
+bodies (only the document secrets), so JSON output is byte-stable. `--no-docs`
+additionally strips those secret keys from `--json` for minimal output.
+
 ## Reading discussions
 
 ```bash
 fibery comments list 42 --db "Development/Dev Task"
 fibery comments list DT-42 --db "Development/Dev Task"
+
+# Incremental re-reads — fetch only the bodies you need:
+fibery comments list 42 --db "Development/Dev Task" --limit 3      # latest 3, oldest-first
+fibery comments list 42 --db "Development/Dev Task" --since 24h    # added in the last day
+fibery comments list 42 --db "Development/Dev Task" --since 2026-06-20T00:00:00Z
 ```
 
 Returns each comment as a Markdown section with author, RFC3339 datetime, and
-the body content (fetched per-comment via the documents API).
+the body content (fetched per-comment via the documents API). `--limit N` keeps
+only the latest N (still rendered oldest-first); `--since` takes RFC3339 or a
+relative form (`24h`, `7d`, `30m`) and returns only comments created after it.
+Both bound the set *before* bodies are fetched, so dropped comments cost nothing.
+They compose (`--since` first, then `--limit`); empty result prints `_No comments._`.
 
 ## Commenting: mentions, references, replies
 

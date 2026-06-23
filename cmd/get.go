@@ -19,6 +19,8 @@ var (
 	getDB     string
 	getIDOnly bool
 	getFields []string
+	getNoDocs bool
+	getDocs   bool
 )
 
 var getCmd = &cobra.Command{
@@ -47,13 +49,9 @@ Script-friendly (extract the UUID):
 		}
 		schema, _ := cache.LoadSchema(account)
 		sel, docKeys := buildFullSelect(schema, getDB)
-		if len(getFields) > 0 {
-			filtered, err := filterSelectByAliases(sel, getFields, "fibery/id", "Public ID", "Name")
-			if err != nil {
-				return err
-			}
-			sel = filtered
-			docKeys = filterDocKeys(docKeys, sel)
+		sel, docKeys, errNarrow := narrowReadSelect(sel, docKeys, getFields, getNoDocs, "fibery/id", "Public ID", "Name")
+		if errNarrow != nil {
+			return errNarrow
 		}
 
 		var queryArgs map[string]any
@@ -89,7 +87,7 @@ Script-friendly (extract the UUID):
 
 		var items []json.RawMessage
 		if err := json.Unmarshal(result, &items); err != nil || len(items) == 0 {
-			return fmt.Errorf("entity %q not found in %s", args[0], getDB)
+			return notFoundRefErr(args[0], getDB)
 		}
 		// For public ID queries, pick exact match
 		matched := items[0]
@@ -110,8 +108,10 @@ Script-friendly (extract the UUID):
 			fmt.Println(id)
 			return nil
 		}
+		// Bodies shown only on explicit --docs, or when --fields named a doc field.
+		showDocs := getDocs || (len(getFields) > 0 && len(docKeys) > 0)
 		return outputJSON(matched, func() error {
-			return printEntityLLMFull(cmd.Context(), matched, getDB, docKeys)
+			return printEntityLLMFull(cmd.Context(), matched, getDB, docKeys, showDocs)
 		})
 	},
 }
@@ -131,6 +131,13 @@ func buildSelect(schema map[string]any, db string) map[string]any {
 		sel["Name"] = []any{nameField}
 	}
 	return sel
+}
+
+// notFoundRefErr formats an entity-not-found error that names the accepted ID
+// forms on one line, so agents stop thrashing between public / prefixed / UUID
+// inputs. It does not dump the schema.
+func notFoundRefErr(ref, db string) error {
+	return fmt.Errorf("entity %q not found in %s — accepted: public id \"42\", prefixed \"DT-42\", a UUID, or 'fibery resolve <url>'", ref, db)
 }
 
 // isUUID returns true if s looks like a UUID.
@@ -202,9 +209,52 @@ func resolveEntityRef(ctx context.Context, db, ref string) (string, error) {
 		return "", fmt.Errorf("resolve entity %q in %s: parse: %w", ref, db, err)
 	}
 	if len(items) == 0 {
-		return "", fmt.Errorf("entity %q not found in %s", ref, db)
+		return "", notFoundRefErr(ref, db)
 	}
 	return asStr(items[0]["id"]), nil
+}
+
+// narrowReadSelect applies the --fields and --no-docs read modifiers to a full
+// entity select and its document keys, returning the narrowed select plus the
+// surviving doc keys. It is shared by get and resolve.
+//
+// --fields wins: when fields are given they fully determine the selection (a
+// rich-text field survives only if explicitly named), so --no-docs adds nothing
+// and is intentionally a no-op in that case — avoiding a contradiction error.
+// With no --fields, --no-docs drops every rich-text document body from the
+// select so the (potentially large) bodies are never queried or fetched.
+func narrowReadSelect(sel map[string]any, docKeys []string, fields []string, noDocs bool, alwaysKeep ...string) (map[string]any, []string, error) {
+	if len(fields) > 0 {
+		filtered, err := filterSelectByAliases(sel, fields, alwaysKeep...)
+		if err != nil {
+			return nil, nil, err
+		}
+		return filtered, filterDocKeys(docKeys, filtered), nil
+	}
+	if noDocs {
+		sel, docKeys = dropDocKeys(sel, docKeys)
+	}
+	return sel, docKeys, nil
+}
+
+// dropDocKeys returns a copy of sel with every document-body key removed, and a
+// nil doc-key slice. Used by --no-docs to suppress rich-text bodies.
+func dropDocKeys(sel map[string]any, docKeys []string) (map[string]any, []string) {
+	if len(docKeys) == 0 {
+		return sel, docKeys
+	}
+	drop := make(map[string]bool, len(docKeys))
+	for _, k := range docKeys {
+		drop[k] = true
+	}
+	out := make(map[string]any, len(sel))
+	for k, v := range sel {
+		if drop[k] {
+			continue
+		}
+		out[k] = v
+	}
+	return out, nil
 }
 
 // filterDocKeys drops doc keys whose select entry was filtered out so we don't
@@ -288,5 +338,7 @@ func init() {
 	getCmd.Flags().StringVar(&getDB, "db", "", "database name (e.g. \"Development/Dev Task\")")
 	getCmd.Flags().BoolVar(&getIDOnly, "id-only", false, "output only the fibery/id UUID (for scripting)")
 	getCmd.Flags().StringSliceVar(&getFields, "fields", nil, "comma-separated field aliases to return (saves tokens; e.g. \"Name,State,Priority\")")
+	getCmd.Flags().BoolVar(&getDocs, "docs", false, "include rich-text document bodies (Description etc.) — off by default to save tokens")
+	getCmd.Flags().BoolVar(&getNoDocs, "no-docs", false, "also drop document secret keys from --json (rendered bodies are already hidden by default)")
 	rootCmd.AddCommand(getCmd)
 }
