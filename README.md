@@ -189,6 +189,21 @@ fibery comments list 42 --db "Development/Dev Task" --since 24h
 fibery comment edit 36129 "corrected text"
 fibery comment delete 36129 --yes
 
+# Inline (document) comments — anchored to a text range inside a rich-text field,
+# distinct from the entity comments above. They live in the document body.
+# List shows each thread's id, state, anchored text, body, and replies.
+fibery comment-inline list https://acme.fibery.io/Development/Dev_epic/X-2319
+
+# Anchor a comment to a substring of the document text (--occurrence N if it repeats).
+fibery comment-inline add 42 --db "Development/Dev Task" \
+  --on "race condition" "still possible after the lock fix?"
+
+# Reply / resolve / delete by the [thread-id] from `comment-inline list`.
+fibery comment-inline reply   42 --db "Development/Dev Task" --thread <id> "fixed by the lock"
+fibery comment-inline resolve 42 --db "Development/Dev Task" --thread <id>   # --reopen to undo
+fibery comment-inline delete  42 --db "Development/Dev Task" --thread <id>
+# --field selects the document field (default: the entity's primary Description doc).
+
 # Delete entity — requires --yes
 fibery delete 42 --db "Development/Dev Task" --yes
 
@@ -327,7 +342,7 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 
 ## Notes
 
-- All entity commands (`get`, `update`, `state`, `delete`, `comment`, `comments list`, `doc`) accept UUID, `DT-42`, or `42` — the CLI resolves public IDs internally
+- All entity commands (`get`, `update`, `state`, `delete`, `comment`, `comments list`, `comment-inline`, `doc`) accept UUID, `DT-42`, or `42` — the CLI resolves public IDs internally
 - `fibery get` returns exit 1 when an entity is not found (not silent success)
 - `fibery state` looks up state UUIDs automatically — just use the state name
 - `fibery search` without `--db` in non-TTY mode lists all available databases

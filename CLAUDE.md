@@ -173,6 +173,7 @@ These are not documented anywhere except in the wild; encode them into helpers r
 11. **Markdown documents endpoint** uses `?format=md`. The response is JSON `{"content": "..."}` for GET; PUT body is `{"content": "...", "type": "text/markdown"}`.
 12. **Database names use `/`**: `"Development/Dev Task"`, with a literal space in the DB part. URLs replace spaces with underscores; `resolveURL` and friends translate back.
 13. **Enum/relation type names contain `_`** after the `/` (e.g. `Development/State_Development/Dev Task`). `listDatabases` skips these to avoid showing helper types to the user.
+14. **Inline (document) comments live in the document body**, not in `comments/comment`. `GET /api/documents/<secret>?format=json` returns `{secret, content:{doc, comments}, modificationDate}` — `content.comments` is an array of threads `{from, to, id, body:{doc, comments[]}, date, author:{id}, thread, state, detached}`, anchored by ProseMirror positions `from`/`to`. Write with `PUT /api/documents/<secret>?format=json` body `{"content": {doc, comments}}` — content as a JSON **object**, **no `type` field** (sending a stringified content or a `type` routes through the markdown path and overwrites the body). `client.GetDocumentJSON`/`SetDocumentJSON` encapsulate this; `comment-inline` mutates only the `comments` array (keeps `doc` as `json.RawMessage` so the body round-trips byte-identically). ProseMirror position math lives in `utils_prosemirror.go` (`pmFindRange`/`pmSliceText`: text rune=1 UTF-16 unit, block open/close=1 each, leaf=1).
 
 ---
 
