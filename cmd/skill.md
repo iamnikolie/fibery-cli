@@ -48,6 +48,11 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery comment edit <comment-id> <text>` | Replace a comment's body (host entity inferred) | — |
 | `fibery comment delete <comment-id>` | Delete a comment (host entity inferred) | `--yes` (required) |
 | `fibery comments list <id>` | List comments on an entity with author, date, comment id, and markdown body | `--db` (required), `--limit` (latest N), `--since` (RFC3339\|24h\|7d) |
+| `fibery comment-inline list <url-or-id>` | List inline (document) comments: thread id, state, anchored text, body, replies | `--db`, `--field` |
+| `fibery comment-inline add <url-or-id> --on "<text>" "<body>"` | Add an inline comment anchored to a text substring | `--db`, `--field`, `--on` (required), `--occurrence <N>` |
+| `fibery comment-inline reply <url-or-id> --thread <id> "<body>"` | Reply within an inline comment thread | `--db`, `--field`, `--thread` (required) |
+| `fibery comment-inline resolve <url-or-id> --thread <id>` | Resolve or reopen a thread | `--db`, `--field`, `--thread` (required), `--reopen` |
+| `fibery comment-inline delete <url-or-id> --thread <id>` | Delete an inline comment thread | `--db`, `--field`, `--thread` (required) |
 | `fibery doc get <secret\|id\|url>` | Get document as Markdown | `--db`, `--field` (entity ID), `--secret` (raw UUID secret) |
 | `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
 | `fibery doc append <secret\|id\|url> <md>` | Append Markdown to a document | `--db`, `--field`, `--secret` |
@@ -75,7 +80,7 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 
 ## ID formats
 
-All entity commands (`get`, `update`, `state`, `comment`, `comments list`, `delete`, `doc`, `url`) accept:
+All entity commands (`get`, `update`, `state`, `comment`, `comments list`, `comment-inline`, `delete`, `doc`, `url`) accept:
 - UUID: `550e8400-e29b-41d4-a716-446655440000`
 - Public ID: `42`
 - Prefixed public ID: `DT-42` (prefix is stripped automatically)
@@ -86,6 +91,32 @@ no separate `get --id-only` round-trip is needed.
 `comment edit`/`comment delete` take a comment id (the UUID or public id shown by
 `comments list`). Comments live in the system database `comments/comment` — you
 rarely need that name, but `fibery schema show comments/comment` works if you do.
+
+## Inline (document) comments
+
+`comment-inline` manages comments anchored to a text range *inside* a rich-text field
+(the Google-Docs-style highlight comments), distinct from entity comments above. They live
+in the document body, not in `comments/comment`.
+
+```bash
+# Read inline comments (copy the [thread-id] for reply/resolve/delete)
+fibery comment-inline list https://acme.fibery.io/Development/Dev_epic/X-2319
+
+# Anchor a comment to a substring of the document text
+fibery comment-inline add DT-42 --db "Development/Dev Task" \
+  --on "race condition" "still possible after the lock fix?"
+
+# Reply / resolve / delete by thread id
+fibery comment-inline reply   DT-42 --db "Development/Dev Task" --thread <id> "fixed by the lock"
+fibery comment-inline resolve DT-42 --db "Development/Dev Task" --thread <id>   # --reopen to undo
+fibery comment-inline delete  DT-42 --db "Development/Dev Task" --thread <id>
+```
+
+- `--on` matches a contiguous substring of the document text; if it appears more than once,
+  pass `--occurrence N` (1-based). Anchors must stay within a single block (paragraph/heading).
+- `--field` selects the document field (default: the entity's primary `Description` doc).
+  By-id forms prefer a UUID; a URL never needs `--db`.
+- Mutations rewrite only the inline-comment array — the document body is left untouched.
 
 ## Enum and user field resolution
 

@@ -293,3 +293,65 @@ func resolveDocSecretByID(ctx context.Context, db, entityID, field string) (stri
 	}
 	return secret, nil
 }
+
+// currentUserID returns the fibery/id of the token's user (via the $my-id query param).
+func currentUserID(ctx context.Context) (string, error) {
+	raw, err := cli.One(ctx, client.Command{
+		Command: "fibery.entity/query",
+		Args: map[string]any{
+			"query": map[string]any{
+				"q/from":   "fibery/user",
+				"q/select": map[string]any{"id": "fibery/id"},
+				"q/where":  []any{"=", []any{"fibery/id"}, "$my-id"},
+				"q/limit":  1,
+			},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("currentUserID: %w", err)
+	}
+	var items []map[string]any
+	if err := json.Unmarshal(raw, &items); err != nil || len(items) == 0 {
+		return "", fmt.Errorf("currentUserID: could not resolve current user")
+	}
+	id := asStr(items[0]["id"])
+	if id == "" {
+		return "", fmt.Errorf("currentUserID: empty id")
+	}
+	return id, nil
+}
+
+// resolveUserEmails maps fibery user ids to emails (best-effort; missing ids are skipped).
+func resolveUserEmails(ctx context.Context, ids []string) map[string]string {
+	out := map[string]string{}
+	if len(ids) == 0 {
+		return out
+	}
+	anyIDs := make([]any, len(ids))
+	for i, s := range ids {
+		anyIDs[i] = s
+	}
+	raw, err := cli.One(ctx, client.Command{
+		Command: "fibery.entity/query",
+		Args: map[string]any{
+			"query": map[string]any{
+				"q/from":   "fibery/user",
+				"q/select": map[string]any{"id": "fibery/id", "email": "user/email"},
+				"q/where":  []any{"q/in", []any{"fibery/id"}, "$ids"},
+				"q/limit":  "q/no-limit",
+			},
+			"params": map[string]any{"$ids": anyIDs},
+		},
+	})
+	if err != nil {
+		return out
+	}
+	var items []map[string]any
+	if json.Unmarshal(raw, &items) != nil {
+		return out
+	}
+	for _, it := range items {
+		out[asStr(it["id"])] = asStr(it["email"])
+	}
+	return out
+}

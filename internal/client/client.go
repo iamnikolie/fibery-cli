@@ -283,6 +283,56 @@ func (c *Client) SetDocument(ctx context.Context, secret, markdown string) error
 	return nil
 }
 
+// DocContent is the rich-text document payload in the ?format=json envelope. Doc is kept as
+// raw bytes so the document body round-trips byte-identically; Comments is the mutable
+// inline-comment array.
+type DocContent struct {
+	Doc      json.RawMessage `json:"doc"`
+	Comments []any           `json:"comments"`
+}
+
+// DocJSON is the GET /api/documents/<secret>?format=json envelope.
+type DocJSON struct {
+	Secret           string     `json:"secret"`
+	Content          DocContent `json:"content"`
+	ModificationDate string     `json:"modificationDate"`
+}
+
+// GetDocumentJSON fetches a document as ProseMirror JSON, including inline comments
+// (content.comments). Use this instead of GetDocument when inline comments matter.
+func (c *Client) GetDocumentJSON(ctx context.Context, secret string) (*DocJSON, error) {
+	b, err := c.request(ctx, http.MethodGet, "/api/documents/"+secret+"?format=json", nil)
+	if err != nil {
+		return nil, fmt.Errorf("client.GetDocumentJSON: %w", err)
+	}
+	var d DocJSON
+	if err := json.Unmarshal(b, &d); err != nil {
+		return nil, fmt.Errorf("client.GetDocumentJSON: decode: %w", err)
+	}
+	if d.Content.Comments == nil {
+		d.Content.Comments = []any{}
+	}
+	return &d, nil
+}
+
+// SetDocumentJSON writes a document's ProseMirror JSON content (doc + inline comments).
+// The endpoint requires ?format=json with content as a JSON object (NOT a stringified
+// blob, and NOT a "type" field — those route content through the markdown path and either
+// error or overwrite the document body).
+func (c *Client) SetDocumentJSON(ctx context.Context, secret string, content DocContent) error {
+	body, err := json.Marshal(map[string]any{"content": content})
+	if err != nil {
+		return fmt.Errorf("client.SetDocumentJSON: marshal: %w", err)
+	}
+	if _, err := c.request(ctx, http.MethodPut, "/api/documents/"+secret+"?format=json", body); err != nil {
+		return fmt.Errorf("client.SetDocumentJSON: %w", err)
+	}
+	return nil
+}
+
+// NewUUID returns a random UUID v4 (exported wrapper around the internal generator).
+func NewUUID() string { return newUUID() }
+
 // QueryAll runs an entity query repeatedly with an increasing q/offset, paging in
 // chunks of pageSize until a page returns fewer than pageSize rows, and returns the
 // concatenated result as a single JSON array. This sidesteps Fibery's per-query
