@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -11,10 +12,12 @@ import (
 )
 
 var (
-	commentDB       string
-	commentMentions []string
-	commentRefs     []string
-	commentReplyTo  string
+	commentDB        string
+	commentMentions  []string
+	commentRefs      []string
+	commentReplyTo   string
+	commentImages    []string
+	commentClipboard bool
 )
 
 var commentCmd = &cobra.Command{
@@ -41,8 +44,16 @@ Reply to an existing comment (thread). --reply-to takes the parent comment's
 UUID or public ID; the positional arg is still the host entity:
   fibery comment DT-42 --db "Development/bug" "agreed" --reply-to 36129
 
---mention and --ref are repeatable and may be combined. Body text is optional
-when at least one --mention or --ref is given.`,
+Attach screenshots/images — uploaded and embedded inline (rendered in the
+comment body, the same way a pasted image renders in the Fibery UI):
+  fibery comment DT-42 --db "Development/bug" "see repro" --image shot.png
+  fibery comment DT-42 --db "Development/bug" "before/after" --image a.png --image b.png
+
+Embed the current macOS clipboard image (no need to save it first):
+  fibery comment DT-42 --db "Development/bug" "repro" --clipboard
+
+--mention, --ref and --image are repeatable and may be combined. Body text is
+optional when at least one --mention, --ref, --image or --clipboard is given.`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		idOrURL := args[0]
@@ -77,8 +88,18 @@ when at least one --mention or --ref is given.`,
 		}
 
 		content := prependTokens(tokens, text)
+
+		// Upload images (and the clipboard image, if requested) before posting so
+		// a failure aborts cleanly with nothing written, then append their inline
+		// markdown after the text.
+		imgMarkdowns, err := gatherCommentImages(cmd.Context())
+		if err != nil {
+			return err
+		}
+		content = appendInlineImages(content, imgMarkdowns)
+
 		if strings.TrimSpace(content) == "" {
-			return fmt.Errorf("nothing to post: provide comment text or at least one --mention/--ref")
+			return fmt.Errorf("nothing to post: provide comment text, an --image/--clipboard, or at least one --mention/--ref")
 		}
 
 		var parentCommentID string
@@ -95,6 +116,53 @@ when at least one --mention or --ref is given.`,
 		fmt.Println("Comment added.")
 		return nil
 	},
+}
+
+// gatherCommentImages uploads every --image file and, when --clipboard is set,
+// the current clipboard image, returning one inline-image markdown block per
+// upload in flag order (files first, then the clipboard image). Uploads happen
+// before the comment is posted so any failure aborts cleanly with nothing
+// written.
+func gatherCommentImages(ctx context.Context) ([]string, error) {
+	var out []string
+	for _, path := range commentImages {
+		fi, err := uploadLocalFile(ctx, path)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, inlineImageMarkdown(fi.Name, fi.Secret))
+	}
+	if commentClipboard {
+		data, err := grabClipboardImage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		fi, err := cli.UploadFile(ctx, "clipboard.png", "image/png", data)
+		if err != nil {
+			return nil, fmt.Errorf("upload clipboard image: %w", err)
+		}
+		out = append(out, inlineImageMarkdown(fi.Name, fi.Secret))
+	}
+	return out, nil
+}
+
+// appendInlineImages appends inline image markdown blocks to a comment body,
+// separating each block from the preceding content by a blank line. Empty
+// content yields the images alone (no leading blank line); zero images returns
+// content unchanged.
+func appendInlineImages(content string, imgMarkdowns []string) string {
+	if len(imgMarkdowns) == 0 {
+		return content
+	}
+	var b strings.Builder
+	b.WriteString(content)
+	for _, md := range imgMarkdowns {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(md)
+	}
+	return b.String()
 }
 
 // buildCommentTokens turns --mention emails and --ref targets into Fibery
@@ -194,5 +262,7 @@ func init() {
 	commentCmd.Flags().StringArrayVar(&commentMentions, "mention", nil, "email of a user to @mention (repeatable); prepended to the comment and notifies them")
 	commentCmd.Flags().StringArrayVar(&commentRefs, "ref", nil, "entity to reference: a Fibery URL, or an ID/\"DT-42\" within the host database (repeatable)")
 	commentCmd.Flags().StringVar(&commentReplyTo, "reply-to", "", "parent comment UUID or public ID — posts this comment as a threaded reply")
+	commentCmd.Flags().StringArrayVar(&commentImages, "image", nil, "local image file to upload and embed inline in the comment (repeatable)")
+	commentCmd.Flags().BoolVar(&commentClipboard, "clipboard", false, "embed the current macOS clipboard image inline in the comment")
 	rootCmd.AddCommand(commentCmd)
 }

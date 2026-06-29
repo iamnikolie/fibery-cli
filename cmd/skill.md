@@ -44,7 +44,7 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery exec <json>` | Send any raw Fibery command; destructive ones require `--yes` | `--yes` (for delete/remove/drop) |
 | `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required), `--create-missing-enum` |
 | `fibery state <id> <state-name>` | Set workflow state (case-insensitive) | `--db` (required) |
-| `fibery comment <url-or-id> [text]` | Add comment; optionally @mention users, reference entities, or reply | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>` |
+| `fibery comment <url-or-id> [text]` | Add comment; optionally @mention users, reference entities, reply, or embed screenshots/images inline | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>`, `--image <path>` (repeatable), `--clipboard` |
 | `fibery comment edit <comment-id> <text>` | Replace a comment's body (host entity inferred) | — |
 | `fibery comment delete <comment-id>` | Delete a comment (host entity inferred) | `--yes` (required) |
 | `fibery comments list <id>` | List comments on an entity with author, date, comment id, and markdown body | `--db` (required), `--limit` (latest N), `--since` (RFC3339\|24h\|7d) |
@@ -297,9 +297,17 @@ fibery comment 42 --db "Development/Dev Task" "related" --ref https://acme.fiber
 # public ID; the positional arg is still the host entity.
 fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
 
-# Combine — flags are repeatable; body is optional when a --mention/--ref is given
+# Attach screenshots/images — uploaded and embedded inline (rendered in the
+# comment body, like a pasted image). --image is repeatable.
+fibery comment 42 --db "Development/Dev Task" "see repro" --image shot.png
+fibery comment 42 --db "Development/Dev Task" "before/after" --image a.png --image b.png
+
+# Embed the current macOS clipboard image (no need to save it to a file first)
+fibery comment 42 --db "Development/Dev Task" "repro" --clipboard
+
+# Combine — flags are repeatable; body is optional when any --mention/--ref/--image/--clipboard is given
 fibery comment 42 --db "Development/Dev Task" "see context" \
-  --mention dev@acme.com --ref DT-99 --reply-to 36129
+  --mention dev@acme.com --ref DT-99 --reply-to 36129 --image shot.png
 ```
 
 ### Edit / delete a comment

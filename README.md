@@ -175,6 +175,11 @@ fibery comment 42 --db "Development/Dev Task" "please review" --mention dev@acme
 fibery comment 42 --db "Development/Dev Task" "dup of" --ref DT-99
 fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
 
+# Attach screenshots/images — embedded inline (rendered in the comment body).
+# --image is repeatable; --clipboard grabs the current macOS clipboard image.
+fibery comment 42 --db "Development/Dev Task" "see repro" --image shot.png --image after.png
+fibery comment 42 --db "Development/Dev Task" "repro" --clipboard
+
 # Read all comments on an entity (oldest first, markdown bodies + comment ids)
 fibery comments list 42 --db "Development/Dev Task"
 
@@ -329,6 +334,8 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--id-only` | (get/resolve/create) Print only the fibery/id UUID |
 | `--public-id` | (create) Print only the public id of the created entity |
 | `--yes` | (delete/exec/comment delete) Confirm destructive operation — required |
+| `--image <path>` | (comment) Upload a local image and embed it inline in the comment body (repeatable) |
+| `--clipboard` | (comment) Embed the current macOS clipboard image inline in the comment |
 | `--filter 'field=value'` | (list/query/count) Simple schema-aware filter (repeatable; ops `= != ~`); builds the where-clause for you |
 | `--where '<json>'` | (list/query/count) FQL where-clause as JSON |
 | `--doc-file 'Field=path.md'` | (create/update) Set a document field from a file (repeatable) |
