@@ -1,22 +1,41 @@
 # fibery-cli
 
-A CLI for Fibery — replaces the Fibery MCP server in Claude Code sessions. Instead of Claude calling MCP tools, it reads `fibery` command output directly from Bash.
+[![CI](https://github.com/iamnikolie/fibery-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/iamnikolie/fibery-cli/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/iamnikolie/fibery-cli.svg)](https://pkg.go.dev/github.com/iamnikolie/fibery-cli)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A CLI for [Fibery](https://fibery.io) — replaces the Fibery MCP server in Claude Code sessions. Instead of Claude calling MCP tools, it reads `fibery` command output directly from Bash.
+
+It is also a perfectly ordinary CLI: query, create, update, comment on and attach files to Fibery entities from a shell or a script.
+
+> Unofficial, community-built tool. Not affiliated with, endorsed by, or supported by Fibery.io.
 
 ## Install
 
-**Build from source:**
+**Prebuilt binary** — download the archive for your platform from
+[Releases](https://github.com/iamnikolie/fibery-cli/releases), then:
 
 ```bash
-git clone git@github.com:langgerone/fibery-cli.git
+tar xzf fibery-cli_*_darwin_arm64.tar.gz
+sudo mv fibery /usr/local/bin/
+```
+
+**With Go** (1.24+):
+
+```bash
+go install github.com/iamnikolie/fibery-cli@latest
+```
+
+**From source** — `make install` symlinks the binary, so a later `make build` updates
+the installed CLI without reinstalling:
+
+```bash
+git clone https://github.com/iamnikolie/fibery-cli.git
 cd fibery-cli
-make install        # installs symlink to ~/.local/bin/fibery
+make install        # symlink → ~/.local/bin/fibery
 ```
 
-**Or install directly with Go:**
-
-```bash
-go install github.com/langgerone/fibery-cli@latest
-```
+Check what you got with `fibery version`.
 
 ## Setup
 
@@ -338,6 +357,7 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--docs` | (get/resolve) Include rich-text document bodies (hidden by default to save tokens) |
 | `--no-docs` | (get/resolve) Also drop document secret keys from `--json` (rendered bodies already hidden by default) |
 | `--id-only` | (get/resolve/create) Print only the fibery/id UUID |
+| `--version` | Print version, commit and build date (same as `fibery version`) |
 | `--public-id` | (create) Print only the public id of the created entity |
 | `--yes` | (delete/exec/comment delete) Confirm destructive operation — required |
 | `--image <path>` | (comment) Upload a local image and embed it inline in the comment body (repeatable) |
@@ -390,6 +410,12 @@ api_token: your-fibery-api-token
 workspace: your-workspace-name
 ```
 
+The file is written with mode 0600 and holds the API token in plain text — the same
+posture as `~/.aws/credentials` or a `.netrc`. It is a full-access workspace token, so
+keep it out of repositories, dotfile backups and shared machines. `FIBERY_API_TOKEN`
+takes precedence over the file if you would rather source the token from a secret
+manager. Revoke a leaked token in Fibery under Settings → API tokens.
+
 ## Claude Code
 
 Run `fibery skill` to print the full Claude skill reference (commands, flags, and workflows).
@@ -397,8 +423,24 @@ Run `fibery skill` to print the full Claude skill reference (commands, flags, an
 ## Development
 
 ```bash
-go test ./...      # run tests
-go vet ./...       # lint
-make build         # build binary locally
+make test          # go test ./...
+make vet           # go vet ./...
+make fmt           # gofmt -w .
+make build         # build binary locally, version stamped from git describe
 make install       # symlink to ~/.local/bin
 ```
+
+CI runs gofmt, `go vet` and `go test -race` on Linux and macOS for every push and pull
+request. Tests never touch the network — they exercise pure helpers, with `FIBERY_HOME`
+redirecting config and cache to a tmpdir.
+
+Architecture, Fibery API gotchas and the conventions for adding a subcommand are
+documented in [CLAUDE.md](CLAUDE.md).
+
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE) © Mykola Klitovchenko

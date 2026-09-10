@@ -2,7 +2,7 @@
 
 A Go CLI for the Fibery workspace API. Designed to replace the Fibery MCP server inside Claude Code sessions: Claude reads `fibery <subcommand>` stdout directly via Bash instead of calling MCP tools.
 
-The binary is published as `github.com/langgerone/fibery-cli`. Multi-account is supported via `--config <name>`.
+The binary is published as `github.com/iamnikolie/fibery-cli`. Multi-account is supported via `--config <name>`.
 
 ---
 
@@ -10,8 +10,11 @@ The binary is published as `github.com/langgerone/fibery-cli`. Multi-account is 
 
 1. Read this file first — most patterns Claude needs are documented here.
 2. Read `cmd/skill.md` second — that file is **embedded into the binary** via `//go:embed` and printed by `fibery skill`. It is the user-facing reference and the single source of truth for command UX. Any CLI surface change (new flag, renamed subcommand, new behavior) **must** also update `cmd/skill.md` and `README.md`.
-3. Run `go test ./...` and `go vet ./...` before declaring work done.
-4. Default branch is `master`, not `main` or `testing`. PRs go against `master`.
+3. Run `make fmt`, `make vet` and `make test` before declaring work done — CI
+   enforces all three (gofmt, `go vet`, `go test -race`) on Linux and macOS.
+4. Default branch is `main`. PRs go against `main`.
+5. This repo is public (MIT). Never commit a real workspace name, token, entity
+   URL or ticket content — examples use `acme.fibery.io` and `Space/Database`.
 
 ---
 
@@ -19,11 +22,17 @@ The binary is published as `github.com/langgerone/fibery-cli`. Multi-account is 
 
 ```
 main.go                        thin entrypoint → cmd.Execute()
-Makefile                       build / install (symlink to ~/.local/bin/fibery)
+Makefile                       build / install (symlink to ~/.local/bin/fibery), version stamping
 README.md                      user-facing docs
+CONTRIBUTING.md                PR expectations; SECURITY.md — disclosure policy
+LICENSE                        MIT
+.goreleaser.yaml               release archives for linux/darwin/windows × amd64/arm64
+.github/workflows/ci.yml       gofmt + vet + test -race on ubuntu & macos
+.github/workflows/release.yml  GoReleaser on a v* tag
 cmd/
   root.go                      cobra root + global flags + PersistentPreRunE
   skill.go + skill.md          embedded Claude skill reference
+  version.go                   --version / `fibery version`; ldflags-injected build metadata
   config.go                    fibery config init
   schema.go                    schema / schema sync / schema show / schema enums
   search.go                    fibery search
@@ -64,7 +73,7 @@ package cmd
 
 import (
     "github.com/spf13/cobra"
-    "github.com/langgerone/fibery-cli/internal/client"
+    "github.com/iamnikolie/fibery-cli/internal/client"
 )
 
 var fooDB string
@@ -255,5 +264,10 @@ Every command that touches the schema cache must pass `account`. Same for `confi
 - No global mock packages, no DI framework — this CLI is small enough that wiring through package-level `cli`/`cfg` globals is fine.
 - No structured logger — `fmt.Fprintf(os.Stderr, ...)` is the convention. `--verbose` (in `client.Client.Verbose`) is the one debug knob; it prints request/response JSON to stderr.
 - No background workers, no daemons. Every command is single-shot.
-- No version flag yet. If asked to add one, embed it via `-ldflags "-X cmd.version=..."` in the Makefile rather than a separate config file.
-- No linter config — `go vet ./...` is the only static check applied.
+- No config file for build metadata — `version`/`commit`/`date` live in
+  `cmd/version.go` and are injected at link time by the Makefile and by
+  GoReleaser (`-X github.com/iamnikolie/fibery-cli/cmd.version=...`). An
+  unstamped `go build` reports `dev`, which is intentional: better than a
+  binary that lies about its version.
+- No linter config beyond gofmt — `gofmt` and `go vet ./...` are the static
+  checks CI applies. Don't add golangci-lint without a reason.

@@ -68,6 +68,7 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery schema show <db>` (alias `fields`) | Field table (name / type / kind / required) | — |
 | `fibery schema enums <db>` | Enum field values with fibery/id | — |
 | `fibery skill` | Print this skill reference | — |
+| `fibery version` | Print version, commit and build date | also `--version` |
 
 ## Global flags
 
