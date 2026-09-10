@@ -54,6 +54,12 @@ On first run, the schema is fetched automatically and cached to `~/.fibery/schem
 fibery schema sync
 ```
 
+Fields and databases deleted in the Fibery UI are not removed from the workspace
+schema — the server keeps them forever, renamed to `<name>_<hash>_deleted`. The CLI
+filters them out of everything it reads, so they never show up in `fibery get`,
+`fibery schema show` or a `--fields` list. The cached file itself keeps them, so
+`jq . ~/.fibery/schema.json` still shows what the server sent.
+
 Inspect the schema:
 
 ```bash

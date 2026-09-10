@@ -56,6 +56,10 @@ func SchemaModTime(account string) (time.Time, error) {
 	return info.ModTime(), nil
 }
 
+// LoadSchema reads the cached workspace schema. Deletion tombstones the Fibery
+// server keeps in its schema are pruned on the way out (see pruneDeleted), so
+// callers never see a type or field the workspace no longer has. The file on
+// disk stays a faithful copy of the server response.
 func LoadSchema(account string) (map[string]any, error) {
 	path, err := schemaPath(account)
 	if err != nil {
@@ -69,6 +73,7 @@ func LoadSchema(account string) (map[string]any, error) {
 	if err := json.Unmarshal(data, &schema); err != nil {
 		return nil, fmt.Errorf("cache.LoadSchema: parse: %w", err)
 	}
+	pruneDeleted(schema)
 	return schema, nil
 }
 

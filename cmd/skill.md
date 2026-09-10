@@ -360,6 +360,10 @@ so agents know to widen the window:
 If the cached schema is older than 7 days, a stderr warning suggests
 `fibery schema sync`. The warning never blocks the command.
 
+Deleted fields and databases stay in the Fibery schema forever, renamed to
+`<name>_<hash>_deleted`. The CLI hides them, so they never appear in `get`,
+`schema show` or `--fields` — and a database that has some is readable again.
+
 ## Typical workflows
 
 **Find and read an entity:**

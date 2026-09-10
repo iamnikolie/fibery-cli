@@ -117,7 +117,10 @@ For LLM-friendly output (entity detail views), use `printEntityLLMFull(ctx, raw,
 - Path: `~/.fibery/schema.json` (default account) or `~/.fibery/<account>/schema.json`.
 - Auto-fetched on first run by `PersistentPreRunE` in `root.go` if missing.
 - Manually refreshed via `fibery schema sync`.
-- Loaded by `cache.LoadSchema(account)` — returns `map[string]any`.
+- Loaded by `cache.LoadSchema(account)` — returns `map[string]any`, with deletion
+  tombstones already pruned (`internal/cache/prune.go`). The file on disk stays a
+  faithful copy of the server response, so `jq` on it still shows the tombstones;
+  no command ever does. See gotcha 15.
 
 When adding a feature that depends on schema, **never query the API for schema info** — read from the cache. If the schema is missing a field/database the user thinks should exist, instruct them to run `fibery schema sync` rather than papering over it.
 
@@ -174,6 +177,18 @@ These are not documented anywhere except in the wild; encode them into helpers r
 12. **Database names use `/`**: `"Development/Dev Task"`, with a literal space in the DB part. URLs replace spaces with underscores; `resolveURL` and friends translate back.
 13. **Enum/relation type names contain `_`** after the `/` (e.g. `Development/State_Development/Dev Task`). `listDatabases` skips these to avoid showing helper types to the user.
 14. **Inline (document) comments live in the document body**, not in `comments/comment`. `GET /api/documents/<secret>?format=json` returns `{secret, content:{doc, comments}, modificationDate}` — `content.comments` is an array of threads `{from, to, id, body:{doc, comments[]}, date, author:{id}, thread, state, detached}`, anchored by ProseMirror positions `from`/`to`. Write with `PUT /api/documents/<secret>?format=json` body `{"content": {doc, comments}}` — content as a JSON **object**, **no `type` field** (sending a stringified content or a `type` routes through the markdown path and overwrites the body). `client.GetDocumentJSON`/`SetDocumentJSON` encapsulate this; `comment-inline` mutates only the `comments` array (keeps `doc` as `json.RawMessage` so the body round-trips byte-identically). ProseMirror position math lives in `utils_prosemirror.go` (`pmFindRange`/`pmSliceText`: text rune=1 UTF-16 unit, block open/close=1 each, leaf=1).
+15. **Deleted fields and databases stay in the schema forever.** Fibery does not
+    remove them, it flags them `fibery/deleted?: true` and renames them to
+    `<original>_<hash>_deleted` (`Launch Kanban/User_1oddzk6_deleted`). Ignoring
+    the flag is not just noise: `buildFullSelect` puts the ghost into `q/select`,
+    and because the renamed *type* now contains a `_` after the `/`,
+    `isEnumLikeType` misreads a dead relation as an enum and appends `enum/name`
+    — the API answers `entity.error/schema-field-not-found` and `fibery get`
+    fails for the **whole database**. `cache.LoadSchema` prunes deleted types,
+    deleted fields, and live fields whose type was deleted. Always filter on the
+    flag, never on the name suffix: fields inside a deleted type keep their
+    ordinary names but carry the flag, and a live field may legitimately be named
+    `..._deleted`.
 
 ---
 
