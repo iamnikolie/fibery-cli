@@ -24,3 +24,18 @@ func TestSchemaAgeWarning_Stale(t *testing.T) {
 	assert.Contains(t, got, "10 days old")
 	assert.Contains(t, got, "fibery schema sync")
 }
+
+func TestAuthExempt(t *testing.T) {
+	// Reachable before the user has any credentials.
+	for _, name := range []string{
+		"fibery", "init", "version", "skill", "help", "completion",
+		"bash", "zsh", "fish", "powershell",
+	} {
+		assert.True(t, authExempt(name), "%s must run without a token", name)
+	}
+
+	// Everything that talks to the API must not be exempt.
+	for _, name := range []string{"get", "list", "query", "create", "update", "comment", "doc", "files"} {
+		assert.False(t, authExempt(name), "%s must require a token", name)
+	}
+}

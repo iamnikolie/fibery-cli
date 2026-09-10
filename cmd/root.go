@@ -33,8 +33,7 @@ Run 'fibery skill' to print the full Claude skill reference (commands, flags, wo
 	// humans and agents, and the error messages already include the recovery hint.
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// config init doesn't need auth
-		if cmd.Name() == "init" {
+		if authExempt(cmd.Name()) {
 			return nil
 		}
 		var err error
@@ -58,6 +57,20 @@ Run 'fibery skill' to print the full Claude skill reference (commands, flags, wo
 		}
 		return nil
 	},
+}
+
+// authExempt reports whether a command runs without a configured token. These
+// are the commands a user reaches before they have credentials — printing the
+// version or the skill reference must not demand a token first — plus cobra's
+// own help and completion machinery, whose generated subcommands are named
+// after the shell.
+func authExempt(name string) bool {
+	switch name {
+	case "fibery", "init", "version", "skill", "help", "completion",
+		"bash", "zsh", "fish", "powershell":
+		return true
+	}
+	return false
 }
 
 // schemaStaleAfter is how old the cache may be before users see a warning.
