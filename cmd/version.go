@@ -32,7 +32,9 @@ var versionCmd = &cobra.Command{
 	Short: "Print the version",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cmd.Println(versionString())
+		// cmd.Println writes to stderr in cobra, which makes
+		// `v=$(fibery version)` come back empty. Version is data — stdout.
+		fmt.Fprintln(cmd.OutOrStdout(), versionString())
 		return nil
 	},
 }
