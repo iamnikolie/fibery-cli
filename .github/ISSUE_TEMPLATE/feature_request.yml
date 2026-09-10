@@ -1,0 +1,19 @@
+name: Feature request
+description: A command, flag or behavior that is missing
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The task, not the solution — it often turns out an existing flag covers it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like the CLI to do
+      description: A sketch of the command line you wish worked is ideal.
+    validations:
+      required: false
