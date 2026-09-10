@@ -1,0 +1,11 @@
+# Build artifacts
+/fibery
+/dist/
+*.exe
+
+# Local tooling state
+.claude/settings.local.json
+session
+
+# macOS
+.DS_Store

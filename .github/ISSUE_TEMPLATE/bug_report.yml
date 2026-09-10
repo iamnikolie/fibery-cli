@@ -1,0 +1,36 @@
+name: Bug report
+description: Something the CLI does wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The command you ran, what you expected, and what you got instead.
+      placeholder: |
+        $ fibery get 42 --db "Development/Dev Task"
+        expected: the entity
+        got: HTTP 400 ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `fibery version`.
+      placeholder: fibery v0.1.0 (commit abc1234, built ..., go1.24.0 darwin/arm64)
+    validations:
+      required: true
+
+  - type: textarea
+    id: verbose
+    attributes:
+      label: Verbose output
+      description: >
+        Output of the same command with `--verbose`, if you can share it.
+        Redact your workspace name, entity content and anything sensitive —
+        this is a public issue tracker.
+      render: text
+    validations:
+      required: false
