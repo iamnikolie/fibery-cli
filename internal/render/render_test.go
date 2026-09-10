@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/iamnikolie/fibery-cli/internal/render"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/langgerone/fibery-cli/internal/render"
 )
 
 func TestJSON_Pretty(t *testing.T) {

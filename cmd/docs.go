@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/client"
 )
 
 // looksLikeURL reports whether s is an http(s) URL (vs a document secret or an

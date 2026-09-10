@@ -7,11 +7,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/iamnikolie/fibery-cli/internal/cache"
+	"github.com/iamnikolie/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/config"
+	"github.com/iamnikolie/fibery-cli/internal/render"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/cache"
-	"github.com/langgerone/fibery-cli/internal/client"
-	"github.com/langgerone/fibery-cli/internal/config"
-	"github.com/langgerone/fibery-cli/internal/render"
 )
 
 var (

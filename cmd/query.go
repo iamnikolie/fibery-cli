@@ -7,9 +7,9 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/langgerone/fibery-cli/internal/cache"
-	"github.com/langgerone/fibery-cli/internal/client"
-	"github.com/langgerone/fibery-cli/internal/render"
+	"github.com/iamnikolie/fibery-cli/internal/cache"
+	"github.com/iamnikolie/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/render"
 	"github.com/spf13/cobra"
 )
 

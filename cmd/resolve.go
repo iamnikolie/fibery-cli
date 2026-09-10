@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/langgerone/fibery-cli/internal/cache"
-	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/cache"
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/spf13/cobra"
 )
 

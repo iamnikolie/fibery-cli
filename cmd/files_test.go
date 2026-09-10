@@ -81,14 +81,14 @@ func TestInlineImageMarkdown(t *testing.T) {
 
 func TestDetectContentType(t *testing.T) {
 	cases := map[string]string{
-		"diagram.png":  "image/png",
-		"photo.JPG":    "image/jpeg",
-		"a.jpeg":       "image/jpeg",
-		"icon.svg":     "image/svg+xml",
-		"doc.pdf":      "application/pdf",
-		"data.csv":     "text/csv",
-		"mystery.zzz":  "application/octet-stream",
-		"noext":        "application/octet-stream",
+		"diagram.png": "image/png",
+		"photo.JPG":   "image/jpeg",
+		"a.jpeg":      "image/jpeg",
+		"icon.svg":    "image/svg+xml",
+		"doc.pdf":     "application/pdf",
+		"data.csv":    "text/csv",
+		"mystery.zzz": "application/octet-stream",
+		"noext":       "application/octet-stream",
 	}
 	for in, want := range cases {
 		assert.Equal(t, want, detectContentType(in), "for %q", in)

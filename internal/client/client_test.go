@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/langgerone/fibery-cli/internal/client"
 )
 
 func TestClient_One_Success(t *testing.T) {

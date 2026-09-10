@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/iamnikolie/fibery-cli/internal/cache"
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/cache"
-	"github.com/langgerone/fibery-cli/internal/client"
 )
 
 var schemaCmd = &cobra.Command{

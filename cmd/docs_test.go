@@ -3,8 +3,8 @@ package cmd
 import (
 	"testing"
 
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/stretchr/testify/assert"
-	"github.com/langgerone/fibery-cli/internal/client"
 )
 
 func TestLooksLikeURL(t *testing.T) {

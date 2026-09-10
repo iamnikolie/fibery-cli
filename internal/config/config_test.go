@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/iamnikolie/fibery-cli/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/langgerone/fibery-cli/internal/config"
 )
 
 func TestLoad_FromEnv(t *testing.T) {
@@ -105,6 +105,6 @@ func TestLoad_EnvOverFile(t *testing.T) {
 
 	cfg, err := config.Load("")
 	require.NoError(t, err)
-	assert.Equal(t, "envtoken", cfg.APIToken)   // env wins
-	assert.Equal(t, "filews", cfg.Workspace)     // file fills in
+	assert.Equal(t, "envtoken", cfg.APIToken) // env wins
+	assert.Equal(t, "filews", cfg.Workspace)  // file fills in
 }

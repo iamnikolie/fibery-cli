@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/iamnikolie/fibery-cli/internal/config"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/config"
 )
 
 var configCmd = &cobra.Command{

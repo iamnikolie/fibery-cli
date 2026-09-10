@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/iamnikolie/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/render"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/client"
-	"github.com/langgerone/fibery-cli/internal/render"
 )
 
 // isScalarResult returns true if result is a non-null, non-object, non-array JSON value.

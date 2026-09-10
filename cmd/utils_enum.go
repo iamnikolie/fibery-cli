@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/client"
 )
 
 // asStr safely converts any value to string.

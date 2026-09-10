@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/client"
 )
 
 var (

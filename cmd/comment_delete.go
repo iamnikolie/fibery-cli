@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/langgerone/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/spf13/cobra"
 )
 

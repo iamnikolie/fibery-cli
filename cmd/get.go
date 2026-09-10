@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/iamnikolie/fibery-cli/internal/cache"
+	"github.com/iamnikolie/fibery-cli/internal/client"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/cache"
-	"github.com/langgerone/fibery-cli/internal/client"
 )
 
 // rePrefixedID matches "DT-42", "SP-123" etc. and captures just the numeric part.

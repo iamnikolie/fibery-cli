@@ -5,11 +5,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/iamnikolie/fibery-cli/internal/cache"
+	"github.com/iamnikolie/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/render"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/cache"
-	"github.com/langgerone/fibery-cli/internal/client"
-	"github.com/langgerone/fibery-cli/internal/render"
 )
 
 // isTTY returns true when stdout is connected to an interactive terminal.
@@ -72,8 +72,8 @@ Examples:
 			Command: "fibery.entity/query",
 			Args: map[string]any{
 				"query": map[string]any{
-					"q/from":  db,
-					"q/select": sel,
+					"q/from":     db,
+					"q/select":   sel,
 					"q/where":    []any{"q/contains-ignoring-case?", []any{titleField}, "$q"},
 					"q/order-by": []any{[]any{[]any{"fibery/creation-date"}, "q/desc"}},
 					"q/limit":    searchLimit,

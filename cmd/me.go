@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/iamnikolie/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/render"
 	"github.com/spf13/cobra"
-	"github.com/langgerone/fibery-cli/internal/client"
-	"github.com/langgerone/fibery-cli/internal/render"
 )
 
 var meCmd = &cobra.Command{
@@ -20,10 +20,10 @@ var meCmd = &cobra.Command{
 				"query": map[string]any{
 					"q/from": "fibery/user",
 					"q/select": map[string]any{
-						"fibery/id":    "fibery/id",
-						"user/email":   "user/email",
-						"user/name":    "user/name",
-						"fibery/role":  "fibery/role",
+						"fibery/id":   "fibery/id",
+						"user/email":  "user/email",
+						"user/name":   "user/name",
+						"fibery/role": "fibery/role",
 					},
 					"q/where": []any{"=", []any{"fibery/id"}, "$my-id"},
 					"q/limit": 1,
