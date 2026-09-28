@@ -441,6 +441,7 @@ var primitiveFieldTypes = map[string]bool{
 	"fibery/text": true, "fibery/int": true, "fibery/decimal": true,
 	"fibery/bool": true, "fibery/date-time": true, "fibery/date": true,
 	"fibery/email": true, "fibery/date-range": true,
+	"fibery/url": true, "fibery/date-time-range": true, "fibery/location": true,
 }
 
 // fieldAliasMap maps technical field names to human-readable aliases.
