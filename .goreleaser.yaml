@@ -49,3 +49,25 @@ changelog:
 release:
   draft: false
   prerelease: auto
+
+# Formula in iamnikolie/homebrew-tap, rewritten on every tag. Needs the
+# HOMEBREW_TAP_TOKEN secret (fine-grained, contents:write on homebrew-tap only).
+brews:
+  - name: fibery-cli
+    repository:
+      owner: iamnikolie
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    commit_author:
+      name: Mykola Klitovchenko
+      email: mykola.klitovchenko@gmail.com
+    commit_msg_template: "{{ .ProjectName }} {{ .Version }}"
+    homepage: https://github.com/iamnikolie/fibery-cli
+    description: "CLI for Fibery — query, create, comment and attach from a shell"
+    license: MIT
+    skip_upload: auto
+    install: |
+      bin.install "fibery"
+    test: |
+      assert_match(/^fibery /, shell_output("#{bin}/fibery version"))
