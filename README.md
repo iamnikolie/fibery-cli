@@ -289,9 +289,9 @@ Left-nav space documents are not entities; the CLI reaches them through Fibery's
 (undocumented) views API, by URL or public id.
 
 ```bash
-# List space documents (optionally one space)
-fibery docs list
-fibery docs list --space Development --limit 50
+# List space documents (optionally one space). `docs list` is a back-compat alias.
+fibery wiki list
+fibery wiki list --space Development --limit 50
 
 # Read / write / append by URL — resolve also prints the document secret
 fibery resolve "https://acme.fibery.io/Development/My-Doc-280"
@@ -388,7 +388,7 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--select a,b` | (query builder) Field names to select |
 | `--order <field>` | (query builder) Sort field (`-created`, `-modified`, or any field) |
 | `--secret` | (doc get/set/append) Treat the argument as a raw document secret |
-| `--space <name>` | (docs list) Filter to one space |
+| `--space <name>` | (wiki list) Filter to one space |
 | `--skip-invalid` | (create/update) Skip fields/values that don't resolve |
 | `--create-missing-enum` | (create/update/import) Create absent enum values by name |
 
@@ -409,7 +409,7 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 - `fibery url <id> --db ...` prints an entity's canonical web URL; `get` / `resolve` detail output includes a URL line
 - `fibery comment edit/delete <comment-id>` edit or remove a comment by the id shown in `comment list` (host entity inferred; `delete` needs `--yes`)
 - `fibery create` / `fibery update` accept `--doc-file "Field=path.md"` to load a document field from a file; `fibery import` sets rich-text fields from their string value
-- `fibery resolve`, `fibery doc get/set/append`, and `fibery docs list` reach space/wiki documents (left-nav pages) via the views API
+- `fibery resolve`, `fibery doc get/set/append`, and `fibery wiki list` (alias `docs list`) reach space/wiki documents (left-nav pages) via the views API
 - Field names are case-insensitive: `Development/name` auto-corrects to `Development/Name` (canonical name from the cached schema)
 - `--doc "Field=...\n..."` interprets `\n`, `\t`, `\r`, `\\` escapes — use `\\` for a literal backslash
 - `fibery query` accepts both `$id` and `?id` param-reference styles — both normalize to `$id` before the call

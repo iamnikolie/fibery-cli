@@ -66,7 +66,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery doc get <secret\|id\|url>` | Get document as Markdown | `--db`, `--field` (entity ID), `--secret` (raw UUID secret) |
 | `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
 | `fibery doc append <secret\|id\|url> <md>` | Append Markdown to a document | `--db`, `--field`, `--secret` |
-| `fibery docs list` | List space/wiki documents (left-nav pages) | `--space`, `--limit` |
+| `fibery wiki list` | List space/wiki documents (left-nav pages); `docs list` also works | `--space`, `--limit` |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
 | `fibery files download <entity-id>` | Download attachments to disk | `--db` (required), `--field`, `--out`, `--secret`, `--name` |
 | `fibery files upload <entity-id> <file>...` | Upload local files and attach to a file field | `--db` (required), `--field`, `--no-attach` |
@@ -545,9 +545,9 @@ fibery doc get 550e8400-e29b-41d4-a716-446655440000 --secret
 These are not entities — they live behind Fibery's (undocumented) views API. The CLI
 resolves them by URL or public id.
 ```bash
-# List documents (optionally one space)
-fibery docs list
-fibery docs list --space Development --limit 50
+# List documents (optionally one space). `docs list` is a back-compat alias.
+fibery wiki list
+fibery wiki list --space Development --limit 50
 
 # Read / write / append by the document's URL
 fibery resolve "https://acme.fibery.io/Development/My-Doc-280"       # prints name + secret + content

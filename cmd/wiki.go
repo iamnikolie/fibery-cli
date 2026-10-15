@@ -43,29 +43,34 @@ func filterDocumentViews(views []client.ViewRecord, appNames map[string]string, 
 	return out
 }
 
-var docsCmd = &cobra.Command{
-	Use:   "docs",
-	Short: "Work with space/wiki documents (left-nav pages)",
-	Long: `List space/wiki documents.
+// wikiCmd is named `wiki` (not `docs`) to avoid the singular/plural collision
+// with the entity rich-text `doc` command. `docs` is kept as an alias for
+// back-compat, so `fibery docs list` still works.
+var wikiCmd = &cobra.Command{
+	Use:     "wiki",
+	Aliases: []string{"docs"},
+	Short:   "Work with space/wiki documents (left-nav pages)",
+	Long: `List space/wiki documents (the left-nav pages), distinct from the entity
+rich-text fields handled by 'fibery doc'.
 
 Space documents are not part of the entity API; this uses Fibery's undocumented
 query-views endpoint, which may change without notice.`,
 }
 
 var (
-	docsListSpace string
-	docsListLimit int
+	wikiListSpace string
+	wikiListLimit int
 )
 
-var docsListCmd = &cobra.Command{
+var wikiListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List space/wiki documents",
 	Long: `List space/wiki documents across the workspace (or one space with --space).
 
 Examples:
-  fibery docs list
-  fibery docs list --space Development
-  fibery docs list --space Development --limit 50`,
+  fibery wiki list
+  fibery wiki list --space Development
+  fibery wiki list --space Development --limit 50    # 'docs list' also works`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		appNames, err := loadAppNames(cmd.Context())
@@ -76,9 +81,9 @@ Examples:
 		if err != nil {
 			return err
 		}
-		docs := filterDocumentViews(views, appNames, docsListSpace)
-		if docsListLimit > 0 && len(docs) > docsListLimit {
-			docs = docs[:docsListLimit]
+		docs := filterDocumentViews(views, appNames, wikiListSpace)
+		if wikiListLimit > 0 && len(docs) > wikiListLimit {
+			docs = docs[:wikiListLimit]
 		}
 
 		if outputFormat == "json" || jsonOutput {
@@ -173,8 +178,8 @@ func loadAppNames(ctx context.Context) (map[string]string, error) {
 }
 
 func init() {
-	docsListCmd.Flags().StringVar(&docsListSpace, "space", "", "filter to one space (by name)")
-	docsListCmd.Flags().IntVar(&docsListLimit, "limit", 0, "max results (0 = all)")
-	docsCmd.AddCommand(docsListCmd)
-	rootCmd.AddCommand(docsCmd)
+	wikiListCmd.Flags().StringVar(&wikiListSpace, "space", "", "filter to one space (by name)")
+	wikiListCmd.Flags().IntVar(&wikiListLimit, "limit", 0, "max results (0 = all)")
+	wikiCmd.AddCommand(wikiListCmd)
+	rootCmd.AddCommand(wikiCmd)
 }
