@@ -385,11 +385,17 @@ type ViewRecord struct {
 	Type           string
 	DocumentSecret string
 	ContainerAppID string
+	// ContainerType is "app" for a left-nav view, "object" for one owned by an
+	// entity (e.g. embedded in its rich text); ContainerEntityID is then the
+	// owner's public id.
+	ContainerType         string
+	ContainerEntityID     string
+	ContainerEntityTypeID string
 }
 
-// viewRPCResponse / viewRaw decode the query-views JSON-RPC response.
+// viewRPCResponse decodes a views JSON-RPC response.
 type viewRPCResponse struct {
-	Result []viewRaw `json:"result"`
+	Result json.RawMessage `json:"result"`
 	Error  *struct {
 		Message string `json:"message"`
 	} `json:"error"`
@@ -406,51 +412,89 @@ type viewRaw struct {
 	ContainerApp struct {
 		ID string `json:"fibery/id"`
 	} `json:"fibery/container-app"`
+	ContainerType       string `json:"fibery/container-type"`
+	ContainerEntityID   string `json:"fibery/container-entity-id"`
+	ContainerEntityType struct {
+		ID string `json:"fibery/id"`
+	} `json:"fibery/container-entity-type"`
 }
 
 func (r viewRaw) toRecord() ViewRecord {
 	return ViewRecord{
-		ID:             r.ID,
-		Name:           r.Name,
-		PublicID:       r.PublicID,
-		Type:           r.Type,
-		DocumentSecret: r.Meta.DocumentSecret,
-		ContainerAppID: r.ContainerApp.ID,
+		ID:                    r.ID,
+		Name:                  r.Name,
+		PublicID:              r.PublicID,
+		Type:                  r.Type,
+		DocumentSecret:        r.Meta.DocumentSecret,
+		ContainerAppID:        r.ContainerApp.ID,
+		ContainerType:         r.ContainerType,
+		ContainerEntityID:     r.ContainerEntityID,
+		ContainerEntityTypeID: r.ContainerEntityType.ID,
 	}
 }
 
-// QueryViews calls the undocumented POST /api/views/json-rpc "query-views" method
-// and returns the matching views. A nil filter returns every view in the workspace.
-// NOTE: this endpoint is undocumented and may change without notice.
+// viewRPC calls one method of the undocumented POST /api/views/json-rpc endpoint
+// and returns its result. NOTE: this endpoint may change without notice.
+func (c *Client) viewRPC(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	body, err := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params":  params,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+	b, err := c.request(ctx, http.MethodPost, "/api/views/json-rpc", body)
+	if err != nil {
+		return nil, err
+	}
+	var resp viewRPCResponse
+	if err := json.Unmarshal(b, &resp); err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("%s", resp.Error.Message)
+	}
+	return resp.Result, nil
+}
+
+// QueryViews calls the "query-views" method and returns the matching views. A nil
+// filter returns every view in the workspace.
 func (c *Client) QueryViews(ctx context.Context, filter map[string]any) ([]ViewRecord, error) {
 	params := map[string]any{}
 	if filter != nil {
 		params["filter"] = filter
 	}
-	body, err := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"method":  "query-views",
-		"params":  params,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("client.QueryViews: marshal: %w", err)
-	}
-	b, err := c.request(ctx, http.MethodPost, "/api/views/json-rpc", body)
+	result, err := c.viewRPC(ctx, "query-views", params)
 	if err != nil {
 		return nil, fmt.Errorf("client.QueryViews: %w", err)
 	}
-	var resp viewRPCResponse
-	if err := json.Unmarshal(b, &resp); err != nil {
+	var raws []viewRaw
+	if err := json.Unmarshal(result, &raws); err != nil {
 		return nil, fmt.Errorf("client.QueryViews: decode: %w", err)
 	}
-	if resp.Error != nil {
-		return nil, fmt.Errorf("client.QueryViews: %s", resp.Error.Message)
-	}
-	out := make([]ViewRecord, len(resp.Result))
-	for i, r := range resp.Result {
+	out := make([]ViewRecord, len(raws))
+	for i, r := range raws {
 		out[i] = r.toRecord()
 	}
 	return out, nil
+}
+
+// CreateViews creates views from full view records (fibery/id, fibery/name,
+// fibery/type, fibery/meta, container fields) via the "create-views" method.
+func (c *Client) CreateViews(ctx context.Context, views []map[string]any) error {
+	if _, err := c.viewRPC(ctx, "create-views", map[string]any{"views": views}); err != nil {
+		return fmt.Errorf("client.CreateViews: %w", err)
+	}
+	return nil
+}
+
+// DeleteViews deletes views by fibery/id via the "delete-views" method.
+func (c *Client) DeleteViews(ctx context.Context, ids []string) error {
+	if _, err := c.viewRPC(ctx, "delete-views", map[string]any{"ids": ids}); err != nil {
+		return fmt.Errorf("client.DeleteViews: %w", err)
+	}
+	return nil
 }
 
 // QueryView resolves a single view by its public ID (the trailing number in a

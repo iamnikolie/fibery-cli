@@ -67,6 +67,10 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
 | `fibery doc append <secret\|id\|url> <md>` | Append Markdown to a document | `--db`, `--field`, `--secret` |
 | `fibery wiki list` | List space/wiki documents (left-nav pages); `docs list` also works | `--space`, `--limit` |
+| `fibery view create` | Create a list/table view over a database; `--embed` puts it inline in an entity's rich text | `--db`, `--name` (required), `--type list\|table`, `--filter` (repeatable), `--any`, `--where`, `--params`, `--embed`, `--embed-db`, `--embed-field`, `--after-heading` |
+| `fibery view embed <view>` | Insert an existing view (uuid or public id) inline into a rich-text field | `--embed` (required), `--embed-db`, `--embed-field`, `--after-heading` |
+| `fibery view list` | List views (not wiki docs) | `--space`, `--type`, `--owner <public-id>` |
+| `fibery view delete <view>` | Delete a view; an entity-owned view's inline blocks are removed too | `--yes` (required) |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
 | `fibery files download <entity-id>` | Download attachments to disk | `--db` (required), `--field`, `--out`, `--secret`, `--name` |
 | `fibery files upload <entity-id> <file>...` | Upload local files and attach to a file field | `--db` (required), `--field`, `--no-attach` |
@@ -165,6 +169,38 @@ fibery update DT-42 --db "Development/Dev Task" \
 ```
 
 `--doc` and `--doc-file` are both repeatable and may be combined (different fields).
+
+## Views (lists/tables), incl. inline views in rich text
+
+`fibery view` talks to Fibery's undocumented views JSON-RPC API. A view embedded
+with `--embed` is owned by that entity (it does not appear in the left nav) and
+shows up as an inline view block, exactly like `/view` in the editor.
+
+```bash
+# Inline table of bugs whose name carries a tag, at the end of the "Scope" section
+fibery view create --db "Development/bug" --name "ii bugs" --type table \
+  --filter "Development/name~[ii]" \
+  --embed 3947 --embed-db "Development/bug" --embed-field "Development/steps-to-reproduce" \
+  --after-heading Scope
+
+# Several filters are ANDed (--any ORs them). Enum by name, user by email, relation by public id
+fibery view create --db "Development/Dev Task" --name "Mine, open" \
+  --filter "workflow/state=In Progress" --filter "Development/Dev epic=2319" --embed DT-42 --embed-db "Development/Dev Task"
+
+fibery view list --owner 3947                 # views owned by entity #3947
+fibery view embed 2930 --embed 3947 --embed-db "Development/bug" --embed-field "Development/steps-to-reproduce"
+fibery view delete 2930 --yes                 # also removes its inline block from #3947
+```
+
+- Filters are stored by field id, the way the UI filter editor writes them, so they stay
+  editable in Fibery. `~` is case-sensitive "contains" (as in the UI). `--filter` does not
+  take collection fields (`assignments/assignees`): use `--where` with ids for those.
+- A `member` token cannot create left-nav views (`missing a create view permission on
+  space`); entity-owned views (`--embed`) only need edit rights on the entity.
+- Embedding goes through the JSON document endpoint: the rest of the body and its inline
+  comments are untouched (comment anchors after the insert point are shifted).
+- `--after-heading` matches a heading by substring (case-insensitive) and inserts before the
+  next heading of the same or higher level. It is checked before the view is created.
 
 ## Simple filters with --filter (no FQL)
 

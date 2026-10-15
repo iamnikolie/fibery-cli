@@ -311,6 +311,28 @@ You can also get a document secret manually via FQL:
 fibery query '{"q/from":"Development/Dev Task","q/select":{"secret":["Development/Description","Collaboration~Documents/secret"]},"q/limit":1}'
 ```
 
+### Views
+
+Lists and tables over a database, created through Fibery's undocumented views API.
+`--embed` makes the view owned by an entity and inserts it inline into one of its
+rich-text fields (like `/view` in the editor); without it the view goes to the
+space's left nav (needs view-creation rights on the space).
+
+```bash
+fibery view create --db "Development/bug" --name "ii bugs" --type table \
+  --filter "Development/name~[ii]" --filter "workflow/state!=Released" \
+  --embed 3947 --embed-db "Development/bug" --embed-field "Development/steps-to-reproduce" \
+  --after-heading Scope
+fibery view embed 2930 --embed 3947 --embed-db "Development/bug"   # existing view, end of doc
+fibery view list --space Development --type table
+fibery view list --owner 3947
+fibery view delete 2930 --yes   # removes the inline block from the owner too
+```
+
+`--filter` uses the `field<op>value` syntax of `query --filter` (`=`, `!=`, `~` contains);
+enum values match by name, users by email, relations by public id. `--where` / `--params`
+take raw FQL (field names are translated to ids; sub-queries need ids).
+
 ### Files
 
 ```bash

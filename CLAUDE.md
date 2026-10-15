@@ -51,6 +51,9 @@ cmd/
   exec.go                      raw passthrough to POST /api/commands
   me.go                        current user
   inbox.go                     inbox <db>... (recent activity history)
+  wiki.go                      wiki list (space/wiki documents via query-views)
+  view.go                      view create / embed / list / delete (views JSON-RPC)
+  utils_view.go                pure view helpers: filter → field-id meta, inline-view node insert/remove
   utils_enum.go                shared resolvers: field value → API value, enum/user/doc lookups
   *_test.go                    per-command unit tests (pure logic, no network)
 internal/
@@ -198,6 +201,17 @@ These are not documented anywhere except in the wild; encode them into helpers r
     flag, never on the name suffix: fields inside a deleted type keep their
     ordinary names but carry the flag, and a live field may legitimately be named
     `..._deleted`.
+
+16. **Views live behind `POST /api/views/json-rpc`** (`query-views`, `create-views`
+    `{"views":[record]}`, `delete-views` `{"ids":[..]}`) — `client.viewRPC`. A view's
+    `fibery/meta.items[0]` stores `query` (`q/from` = database type id, `q/where` /
+    `q/order-by` over **field ids**, not names), flat `params` (`$where1`..), the UI
+    filter tree `filter`, and `units` (columns). An inline view in rich text is a
+    top-level **`fiberyView`** node (`attrs.viewId`) pointing at a view with
+    `fibery/container-type: "object"` + `container-entity-type/-id (public id)/-uid`.
+    It is NOT the `entity` node with `typeId = fibery/view` (markdown `[[#^…]]`) — that is
+    a reference to a view entity, not an inline view. A `member` token cannot create `container-type:
+    "app"` (left-nav) views; entity-owned ones work. `fibery view` encodes all of this.
 
 ---
 
