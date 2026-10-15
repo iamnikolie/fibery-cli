@@ -11,15 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestJSON_Pretty(t *testing.T) {
-	var buf bytes.Buffer
-	raw := json.RawMessage(`{"name":"Alice","age":30}`)
-	require.NoError(t, render.JSON(&buf, raw))
-	out := buf.String()
-	assert.Contains(t, out, "Alice")
-	assert.Contains(t, out, "30")
-}
-
 func TestList_Empty(t *testing.T) {
 	var buf bytes.Buffer
 	raw := json.RawMessage(`[]`)

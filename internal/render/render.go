@@ -8,17 +8,6 @@ import (
 	"strings"
 )
 
-// JSON pretty-prints raw JSON to w.
-func JSON(w io.Writer, data json.RawMessage) error {
-	var v any
-	if err := json.Unmarshal(data, &v); err != nil {
-		return fmt.Errorf("render.JSON: %w", err)
-	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
-}
-
 // List renders a JSON array as a Markdown table.
 func List(w io.Writer, data json.RawMessage) error {
 	var items []map[string]any
