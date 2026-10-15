@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/spf13/cobra"
 	"github.com/iamnikolie/fibery-cli/internal/cache"
 	"github.com/iamnikolie/fibery-cli/internal/client"
+	"github.com/spf13/cobra"
 )
 
 // runResolve fetches a Fibery entity or space/wiki document by URL. It backs the

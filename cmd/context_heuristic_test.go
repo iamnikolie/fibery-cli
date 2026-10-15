@@ -43,11 +43,11 @@ func TestClassifyProfile(t *testing.T) {
 					field("fibery/creation-date", "fibery/date-time", nil),
 					field("Development/description", "Collaboration~Documents/Document", nil),
 					field("Development/Knowledge transfer", "Collaboration~Documents/Document", nil),
-					field("Development/Story Description", "Collaboration~Documents/Document", nil), // mirror → drop
-					field("Development/Count Open MRs", "fibery/int", nil),                          // rollup → drop
-					field("Development/Flagged", "fibery/bool", nil),                                // flag → drop
-					field("Development/Date Of In Progress", "fibery/date-time", nil),               // transition → drop
-					field("Development/Dev epic", "Development/Dev epic", nil),                      // edge parent
+					field("Development/Story Description", "Collaboration~Documents/Document", nil),          // mirror → drop
+					field("Development/Count Open MRs", "fibery/int", nil),                                   // rollup → drop
+					field("Development/Flagged", "fibery/bool", nil),                                         // flag → drop
+					field("Development/Date Of In Progress", "fibery/date-time", nil),                        // transition → drop
+					field("Development/Dev epic", "Development/Dev epic", nil),                               // edge parent
 					field("Development/bugs", "Development/bug", map[string]any{"fibery/collection?": true}), // edge quality
 				},
 			},
