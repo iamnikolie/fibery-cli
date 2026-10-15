@@ -1,12 +1,37 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRenderCommentsMarkdown(t *testing.T) {
+	orig := fetchDocBody
+	defer func() { fetchDocBody = orig }()
+	fetchDocBody = func(_ context.Context, secret string) string {
+		if secret == "" {
+			return ""
+		}
+		return "body for " + secret
+	}
+	rows := []commentRow{
+		{ID: "u1", PublicID: "101", Author: "Alice", Created: "2026-06-25T10:00:00Z", Secret: "s1"},
+		{ID: "u2", PublicID: "", Author: "", Created: "2026-06-25T11:00:00Z", Secret: ""},
+	}
+	var buf bytes.Buffer
+	renderComments(context.Background(), &buf, rows)
+	out := buf.String()
+	assert.Contains(t, out, "## Alice — 2026-06-25T10:00:00Z")
+	assert.Contains(t, out, "_id: u1 · #101_")
+	assert.Contains(t, out, "body for s1")
+	assert.Contains(t, out, "## ? — 2026-06-25T11:00:00Z") // empty author → "?"
+	assert.Contains(t, out, "_(empty)_")                   // no secret → empty body
+}
 
 func TestLatestN(t *testing.T) {
 	items := []any{"a", "b", "c", "d"}

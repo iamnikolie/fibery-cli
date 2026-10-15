@@ -34,6 +34,8 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery search <text>` | Find entities by name | `--db`, `--limit` (default 20) |
 | `fibery get <id>` | Fetch one entity by public ID, prefixed ID, or UUID — all scalar/relation fields + URL; doc bodies hidden by default | `--db` (required), `--id-only`, `--fields`, `--docs`, `--no-docs` |
 | `fibery resolve <url>` | Fetch entity OR space/wiki document by Fibery URL — doc bodies hidden by default | `--id-only`, `--fields`, `--docs`, `--no-docs` |
+| `fibery context init <db>` | Print a heuristic draft context profile (keep/docs/edges) for a database; `--save` persists it | `--save` |
+| `fibery context <id>` | One-shot curated context bundle: root entity (fields + docs + all comments) + headline graph (parent/children/blockers/MRs/bugs) | `--db`, `--parents-full`, `--no-comments`, `--no-docs`, `--format` |
 | `fibery url <id>` | Print the canonical web URL for an entity (paste into comments/docs/Slack) | `--db` (required) |
 | `fibery list <database>` | List entities in a database | `--limit` (default 50), `--sort`, `--fields`, `--filter`, `--where`, `--params`, `--all` |
 | `fibery query [json]` | FQL query — raw JSON, or built from flags | `--params`, `--db`, `--select`, `--filter`, `--where`, `--limit`, `--order`, `--all` |
@@ -261,6 +263,49 @@ fibery resolve <url> --docs
 without `--docs`. `--json` is unaffected by this default — it never carried the
 bodies (only the document secrets), so JSON output is byte-stable. `--no-docs`
 additionally strips those secret keys from `--json` for minimal output.
+
+## Context bundles
+
+`fibery context <id>` assembles, in one call, everything an agent needs to grok an
+entity: the root rendered full (curated fields + document bodies + all comments)
+plus its connected graph — parent epic/story, children, blockers, merge requests,
+bugs — as a headline table. It replaces the manual `resolve` + `comments list` +
+per-neighbor `get` dance.
+
+Two phases. Curation is driven by a per-database **profile** the agent bootstraps
+once from a heuristic, reviews, and saves; the runtime never re-runs the heuristic.
+
+```bash
+# 1. bootstrap: print the heuristic draft, review/edit, then persist
+fibery context init "Development/Dev Task"            # draft YAML → stdout
+fibery context init "Development/Dev Task" --save     # save to ~/.fibery/context.yaml
+
+# 2. one-shot context (a profile for the db must exist, else "run init first")
+fibery context DT-5683 --db "Development/Dev Task"
+fibery context DT-5683 --db "Development/Dev Task" --parents-full   # expand epic/story full
+fibery context DT-5683 --db "Development/Dev Task" --no-comments    # skip comments
+fibery context DT-5683 --db "Development/Dev Task" --no-docs        # skim: header + graph + comments, doc bodies hidden
+fibery context DT-5683 --db "Development/Dev Task" --json           # structured bundle
+```
+
+Empty to-many edges (no blockers/MRs/bugs) collapse into one `_empty: …_` line
+rather than a section each. `--no-docs` is the skim mode — drop the (often large)
+document bodies and keep the header, comments, and graph.
+
+The heuristic keeps the core (title, state, priority, assignees, dates), allow-lists
+real document fields (description, knowledge transfer, QA summary — never the
+lookup-mirror Story/Epic Description docs), drops noise (int/decimal rollups, bool
+flags, `*_deleted`, transition dates), and classifies relation fields into edge
+roles by name. Anything it cannot classify is listed in a `# unclassified:` comment
+in the draft for the agent to promote.
+
+Profiles live in the **per-account** `context.yaml` (`~/.fibery/[<account>/]context.yaml`),
+isolated exactly like `config.yaml`/`schema.json` — each `--config <name>` has its
+own profile set, matching that workspace's schema.
+
+The `<id>` accepts a public id, `DT-42`, a UUID, or a full Fibery URL (URL infers
+the db). `--parents-full` expands each parent node to full docs + comments (parents
+that resolve to the same entity are expanded once).
 
 ## Reading discussions
 

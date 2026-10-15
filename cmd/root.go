@@ -33,7 +33,10 @@ Run 'fibery skill' to print the full Claude skill reference (commands, flags, wo
 	// humans and agents, and the error messages already include the recovery hint.
 	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if authExempt(cmd.Name()) {
+		// "init" is exempt only as `fibery config init`; `context init` needs
+		// the schema cache loaded.
+		isContextInit := cmd.Name() == "init" && cmd.Parent() != nil && cmd.Parent().Name() != "config"
+		if authExempt(cmd.Name()) && !isContextInit {
 			return nil
 		}
 		var err error

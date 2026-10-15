@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strconv"
@@ -70,102 +71,137 @@ Example:
 			return err
 		}
 
-		// One query: navigate the entity's comments/comments collection, pulling
-		// author, date, and document secret for each comment. Document bodies
-		// are fetched in a second batch below.
-		commentsQuery := map[string]any{
-			"q/from": "comments/comments",
-			"q/select": map[string]any{
-				"ID":       []any{"fibery/id"},
-				"PublicID": []any{"fibery/public-id"},
-				"Created":  []any{"fibery/creation-date"},
-				"Author":   []any{"comment/author", "user/name"},
-				"Secret":   []any{"comment/document-secret"},
-			},
-			"q/order-by": []any{[]any{[]any{"fibery/creation-date"}, "q/asc"}},
-			"q/limit":    "q/no-limit",
-		}
-		params := map[string]any{"$eid": entityID}
-		if sinceParam != "" {
-			commentsQuery["q/where"] = []any{">", []any{"fibery/creation-date"}, "$since"}
-			params["$since"] = sinceParam
-		}
-
-		result, err := cli.One(cmd.Context(), client.Command{
-			Command: "fibery.entity/query",
-			Args: map[string]any{
-				"query": map[string]any{
-					"q/from":   commentsListDB,
-					"q/select": map[string]any{"Comments": commentsQuery},
-					"q/where":  []any{"=", []any{"fibery/id"}, "$eid"},
-					"q/limit":  1,
-				},
-				"params": params,
-			},
-		})
+		rows, err := collectCommentRows(cmd.Context(), commentsListDB, entityID, commentsListLimit, sinceParam)
 		if err != nil {
 			return err
 		}
-
-		var rows []map[string]any
-		if err := json.Unmarshal(result, &rows); err != nil {
-			return fmt.Errorf("comments list: parse: %w", err)
-		}
 		if len(rows) == 0 {
-			return fmt.Errorf("entity %q not found in %s", args[0], commentsListDB)
-		}
-		commentsAny, _ := rows[0]["Comments"].([]any)
-		// --limit: keep only the latest N (the tail of the oldest-first list), so
-		// bodies are fetched only for the comments actually rendered.
-		if commentsListLimit > 0 {
-			commentsAny = latestN(commentsAny, commentsListLimit)
-		}
-		if len(commentsAny) == 0 {
 			fmt.Fprintln(os.Stdout, "_No comments._")
 			return nil
 		}
 
-		// JSON output mode: dump the raw comments array (without doc bodies).
+		// JSON output mode: dump the comment metadata rows (without doc bodies).
 		// Document fetches happen only for the rendered path since they are
 		// extra round-trips.
 		if outputFormat == "json" || (outputFormat == "" && jsonOutput) {
-			rawComments, _ := json.MarshalIndent(commentsAny, "", "  ")
-			fmt.Println(string(rawComments))
+			raw, _ := json.MarshalIndent(rows, "", "  ")
+			fmt.Println(string(raw))
 			return nil
 		}
 
-		for _, c := range commentsAny {
-			cm, _ := c.(map[string]any)
-			author := asStr(cm["Author"])
-			if author == "" {
-				author = "?"
-			}
-			created := asStr(cm["Created"])
-			secret := asStr(cm["Secret"])
-			body := ""
-			if secret != "" {
-				if got, err := cli.GetDocument(cmd.Context(), secret); err == nil {
-					body = strings.TrimSpace(got)
-				}
-			}
-			fmt.Fprintf(os.Stdout, "## %s — %s\n\n", author, created)
-			// Comment id (and public id) so the comment can be targeted by
-			// `fibery comment edit/delete`.
-			id := asStr(cm["ID"])
-			if pid := asStr(cm["PublicID"]); pid != "" {
-				fmt.Fprintf(os.Stdout, "_id: %s · #%s_\n\n", id, pid)
-			} else {
-				fmt.Fprintf(os.Stdout, "_id: %s_\n\n", id)
-			}
-			if body == "" {
-				fmt.Fprintln(os.Stdout, "_(empty)_")
-			} else {
-				fmt.Fprintln(os.Stdout, body)
-			}
-			fmt.Fprintln(os.Stdout)
-		}
+		renderComments(cmd.Context(), os.Stdout, rows)
 		return nil
 	},
+}
+
+// commentRow is one comment's metadata (body fetched separately by secret).
+type commentRow struct {
+	ID       string `json:"id"`
+	PublicID string `json:"publicId"`
+	Author   string `json:"author"`
+	Created  string `json:"created"`
+	Secret   string `json:"secret"`
+}
+
+// fetchDocBody is the document-body fetch, indirected so tests can stub it.
+var fetchDocBody = func(ctx context.Context, secret string) string {
+	if secret == "" {
+		return ""
+	}
+	got, err := cli.GetDocument(ctx, secret)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(got)
+}
+
+// collectCommentRows runs one query navigating the entity's comments collection,
+// applying an optional --since lower bound (server-side, RFC3339) and --limit
+// tail. Bodies are not fetched here.
+func collectCommentRows(ctx context.Context, db, entityID string, limit int, since string) ([]commentRow, error) {
+	commentsQuery := map[string]any{
+		"q/from": "comments/comments",
+		"q/select": map[string]any{
+			"ID":       []any{"fibery/id"},
+			"PublicID": []any{"fibery/public-id"},
+			"Created":  []any{"fibery/creation-date"},
+			"Author":   []any{"comment/author", "user/name"},
+			"Secret":   []any{"comment/document-secret"},
+		},
+		"q/order-by": []any{[]any{[]any{"fibery/creation-date"}, "q/asc"}},
+		"q/limit":    "q/no-limit",
+	}
+	params := map[string]any{"$eid": entityID}
+	if since != "" {
+		commentsQuery["q/where"] = []any{">", []any{"fibery/creation-date"}, "$since"}
+		params["$since"] = since
+	}
+	result, err := cli.One(ctx, client.Command{
+		Command: "fibery.entity/query",
+		Args: map[string]any{
+			"query": map[string]any{
+				"q/from":   db,
+				"q/select": map[string]any{"Comments": commentsQuery},
+				"q/where":  []any{"=", []any{"fibery/id"}, "$eid"},
+				"q/limit":  1,
+			},
+			"params": params,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(result, &rows); err != nil {
+		return nil, fmt.Errorf("comments: parse: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	commentsAny, _ := rows[0]["Comments"].([]any)
+	// --limit: keep only the latest N (tail of the oldest-first list) so bodies
+	// are fetched only for the comments actually rendered.
+	if limit > 0 {
+		commentsAny = latestN(commentsAny, limit)
+	}
+	out := make([]commentRow, 0, len(commentsAny))
+	for _, c := range commentsAny {
+		cm, _ := c.(map[string]any)
+		out = append(out, commentRow{
+			ID:       asStr(cm["ID"]),
+			PublicID: asStr(cm["PublicID"]),
+			Author:   asStr(cm["Author"]),
+			Created:  asStr(cm["Created"]),
+			Secret:   asStr(cm["Secret"]),
+		})
+	}
+	return out, nil
+}
+
+// renderComments writes each comment as a markdown section, fetching bodies by
+// secret via fetchDocBody.
+func renderComments(ctx context.Context, w io.Writer, rows []commentRow) {
+	for _, r := range rows {
+		author := r.Author
+		if author == "" {
+			author = "?"
+		}
+		fmt.Fprintf(w, "## %s — %s\n\n", author, r.Created)
+		// Comment id (and public id) so the comment can be targeted by
+		// `fibery comment edit/delete`.
+		if r.PublicID != "" {
+			fmt.Fprintf(w, "_id: %s · #%s_\n\n", r.ID, r.PublicID)
+		} else {
+			fmt.Fprintf(w, "_id: %s_\n\n", r.ID)
+		}
+		body := fetchDocBody(ctx, r.Secret)
+		if body == "" {
+			fmt.Fprintln(w, "_(empty)_")
+		} else {
+			fmt.Fprintln(w, body)
+		}
+		fmt.Fprintln(w)
+	}
 }
 
 // resolveCommentSecret returns the document secret backing a comment, given the

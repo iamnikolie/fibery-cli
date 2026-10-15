@@ -154,9 +154,25 @@ TICKET_UUID=$(fibery resolve https://acme.fibery.io/Development/bug/Some-bug-324
 # Fetch any entity by Fibery URL (full content + document)
 fibery resolve https://acme.fibery.io/Development/bug/Some-bug-3245
 
+# One-shot context bundle: root full (fields + docs + all comments) + headline graph
+# (parent epic/story, children, blockers, MRs, bugs). Needs a saved profile first.
+fibery context init "Development/Dev Task"            # heuristic draft → stdout
+fibery context init "Development/Dev Task" --save     # persist to ~/.fibery/context.yaml
+fibery context DT-5683 --db "Development/Dev Task"
+fibery context DT-5683 --db "Development/Dev Task" --parents-full   # expand epic/story full
+fibery context DT-5683 --db "Development/Dev Task" --no-docs        # skim: header + graph + comments (doc bodies hidden)
+fibery context DT-5683 --db "Development/Dev Task" --json           # structured bundle
+
 # Show full cached workspace schema JSON
 fibery schema
 ```
+
+Context profiles are per-account (`~/.fibery/[<account>/]context.yaml`), isolated like
+`config.yaml`/`schema.json`. The heuristic keeps core fields + real doc fields, drops
+rollups/flags/transition-dates, and classifies relation fields into edge roles; the
+agent reviews the draft (unclassified relations are listed as comments) before `--save`.
+The runtime reads the saved profile and never re-runs the heuristic — if none exists it
+errors with "run init first".
 
 ### Write
 
