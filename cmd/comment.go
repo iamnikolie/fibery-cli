@@ -54,68 +54,87 @@ Embed the current macOS clipboard image (no need to save it first):
 
 --mention, --ref and --image are repeatable and may be combined. Body text is
 optional when at least one --mention, --ref, --image or --clipboard is given.`,
-	Args: cobra.RangeArgs(1, 2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		idOrURL := args[0]
-		text := ""
-		if len(args) == 2 {
-			text = args[1]
-		}
+	Args:    cobra.RangeArgs(1, 2),
+	Aliases: []string{"comments"},
+	RunE:    runCommentAdd,
+}
 
-		var entityID, db string
+// commentAddCmd is the explicit form of the default add action: both
+// `fibery comment <url> <text>` and `fibery comment add <url> <text>` add a
+// comment. The explicit `add` subcommand also catches the `fibery comments add`
+// mis-guess (via the `comments` alias on the parent).
+var commentAddCmd = &cobra.Command{
+	Use:   "add <url-or-id> [text]",
+	Short: "Add a comment to a Fibery entity (explicit form of the default `comment`)",
+	Args:  cobra.RangeArgs(1, 2),
+	RunE:  runCommentAdd,
+}
 
-		if strings.HasPrefix(idOrURL, "http") {
-			var err error
-			db, entityID, err = resolveURLToEntityID(cmd, idOrURL)
-			if err != nil {
-				return err
-			}
-		} else {
-			if commentDB == "" {
-				return fmt.Errorf("--db is required when not using a URL")
-			}
-			var err error
-			entityID, err = resolveEntityRef(cmd.Context(), commentDB, idOrURL)
-			if err != nil {
-				return err
-			}
-			db = commentDB
-		}
+// runCommentAdd adds a comment to the entity named by args[0] — a Fibery URL, or
+// an id/"DT-42"/"42" together with --db.
+func runCommentAdd(cmd *cobra.Command, args []string) error {
+	idOrURL := args[0]
+	text := ""
+	if len(args) == 2 {
+		text = args[1]
+	}
 
-		tokens, err := buildCommentTokens(cmd, db)
+	var entityID, db string
+
+	if strings.HasPrefix(idOrURL, "http") {
+		var err error
+		db, entityID, err = resolveURLToEntityID(cmd, idOrURL)
 		if err != nil {
 			return err
 		}
-
-		content := prependTokens(tokens, text)
-
-		// Upload images (and the clipboard image, if requested) before posting so
-		// a failure aborts cleanly with nothing written, then append their inline
-		// markdown after the text.
-		imgMarkdowns, err := gatherCommentImages(cmd.Context())
+	} else {
+		if commentDB == "" {
+			return fmt.Errorf("--db is required when not using a URL")
+		}
+		if err := validateDB(commentDB); err != nil {
+			return err
+		}
+		var err error
+		entityID, err = resolveEntityRef(cmd.Context(), commentDB, idOrURL)
 		if err != nil {
 			return err
 		}
-		content = appendInlineImages(content, imgMarkdowns)
+		db = commentDB
+	}
 
-		if strings.TrimSpace(content) == "" {
-			return fmt.Errorf("nothing to post: provide comment text, an --image/--clipboard, or at least one --mention/--ref")
-		}
+	tokens, err := buildCommentTokens(cmd, db)
+	if err != nil {
+		return err
+	}
 
-		var parentCommentID string
-		if commentReplyTo != "" {
-			parentCommentID, err = resolveEntityRef(cmd.Context(), "comments/comment", commentReplyTo)
-			if err != nil {
-				return fmt.Errorf("resolve --reply-to %q: %w", commentReplyTo, err)
-			}
-		}
+	content := prependTokens(tokens, text)
 
-		if err := cli.AddComment(cmd.Context(), db, entityID, content, parentCommentID); err != nil {
-			return err
+	// Upload images (and the clipboard image, if requested) before posting so
+	// a failure aborts cleanly with nothing written, then append their inline
+	// markdown after the text.
+	imgMarkdowns, err := gatherCommentImages(cmd.Context())
+	if err != nil {
+		return err
+	}
+	content = appendInlineImages(content, imgMarkdowns)
+
+	if strings.TrimSpace(content) == "" {
+		return fmt.Errorf("nothing to post: provide comment text, an --image/--clipboard, or at least one --mention/--ref")
+	}
+
+	var parentCommentID string
+	if commentReplyTo != "" {
+		parentCommentID, err = resolveEntityRef(cmd.Context(), "comments/comment", commentReplyTo)
+		if err != nil {
+			return fmt.Errorf("resolve --reply-to %q: %w", commentReplyTo, err)
 		}
-		fmt.Println("Comment added.")
-		return nil
-	},
+	}
+
+	if err := cli.AddComment(cmd.Context(), db, entityID, content, parentCommentID); err != nil {
+		return err
+	}
+	fmt.Println("Comment added.")
+	return nil
 }
 
 // gatherCommentImages uploads every --image file and, when --clipboard is set,
@@ -257,12 +276,22 @@ func resolveURLToEntityID(cmd *cobra.Command, rawURL string) (db, entityID strin
 	return parsedDB, asStr(items[0]["UUID"]), nil
 }
 
+// registerCommentAddFlags wires the shared add-comment flags onto c, so the
+// default `comment` form and the explicit `comment add` subcommand expose the
+// same flags. Both bind the same package vars — only the invoked command parses
+// its own flag set, so the shared backing vars never collide.
+func registerCommentAddFlags(c *cobra.Command) {
+	c.Flags().StringVar(&commentDB, "db", "", "database name, required when not using a URL")
+	c.Flags().StringArrayVar(&commentMentions, "mention", nil, "email of a user to @mention (repeatable); prepended to the comment and notifies them")
+	c.Flags().StringArrayVar(&commentRefs, "ref", nil, "entity to reference: a Fibery URL, or an ID/\"DT-42\" within the host database (repeatable)")
+	c.Flags().StringVar(&commentReplyTo, "reply-to", "", "parent comment UUID or public ID — posts this comment as a threaded reply")
+	c.Flags().StringArrayVar(&commentImages, "image", nil, "local image file to upload and embed inline in the comment (repeatable)")
+	c.Flags().BoolVar(&commentClipboard, "clipboard", false, "embed the current macOS clipboard image inline in the comment")
+}
+
 func init() {
-	commentCmd.Flags().StringVar(&commentDB, "db", "", "database name, required when not using a URL")
-	commentCmd.Flags().StringArrayVar(&commentMentions, "mention", nil, "email of a user to @mention (repeatable); prepended to the comment and notifies them")
-	commentCmd.Flags().StringArrayVar(&commentRefs, "ref", nil, "entity to reference: a Fibery URL, or an ID/\"DT-42\" within the host database (repeatable)")
-	commentCmd.Flags().StringVar(&commentReplyTo, "reply-to", "", "parent comment UUID or public ID — posts this comment as a threaded reply")
-	commentCmd.Flags().StringArrayVar(&commentImages, "image", nil, "local image file to upload and embed inline in the comment (repeatable)")
-	commentCmd.Flags().BoolVar(&commentClipboard, "clipboard", false, "embed the current macOS clipboard image inline in the comment")
+	registerCommentAddFlags(commentCmd)
+	registerCommentAddFlags(commentAddCmd)
+	commentCmd.AddCommand(commentAddCmd)
 	rootCmd.AddCommand(commentCmd)
 }

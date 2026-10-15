@@ -142,17 +142,19 @@ fibery get 42 --db "Development/Dev Task"
 fibery get DT-42 --db "Development/Dev Task"
 fibery get 550e8400-e29b-41d4-a716-446655440000 --db "Development/Dev Task"
 
+# get also accepts a full Fibery URL (then --db is inferred, not needed).
+# `resolve` is an alias of `get` — both forms below are identical.
+fibery get https://acme.fibery.io/Development/bug/Some-bug-3245
+fibery resolve https://acme.fibery.io/Development/bug/Some-bug-3245
+
 # Rich-text bodies (Description etc.) are hidden by default to save tokens —
 # you get every scalar/relation field plus a hint naming the hidden docs.
-# Add --docs to include the bodies. Works on get and resolve.
+# Add --docs to include the bodies.
 fibery get 42 --db "Development/Dev Task" --docs
 
-# Script-friendly UUID extraction — works on get, resolve, and create
+# Script-friendly UUID extraction — works on get (by id or URL) and create
 TICKET_UUID=$(fibery get 42 --db "Development/Dev Task" --id-only)
-TICKET_UUID=$(fibery resolve https://acme.fibery.io/Development/bug/Some-bug-3245 --id-only)
-
-# Fetch any entity by Fibery URL (full content + document)
-fibery resolve https://acme.fibery.io/Development/bug/Some-bug-3245
+TICKET_UUID=$(fibery get https://acme.fibery.io/Development/bug/Some-bug-3245 --id-only)
 
 # One-shot context bundle: root full (fields + docs + all comments) + headline graph
 # (parent epic/story, children, blockers, MRs, bugs). Needs a saved profile first.
@@ -221,16 +223,17 @@ fibery comment 42 --db "Development/Dev Task" "agreed" --reply-to 36129
 fibery comment 42 --db "Development/Dev Task" "see repro" --image shot.png --image after.png
 fibery comment 42 --db "Development/Dev Task" "repro" --clipboard
 
-# Read all comments on an entity (oldest first, markdown bodies + comment ids)
-fibery comments list 42 --db "Development/Dev Task"
+# Read all comments on an entity (oldest first, markdown bodies + comment ids).
+# `comments list` also works (alias of the parent `comment`).
+fibery comment list 42 --db "Development/Dev Task"
 
 # Incremental re-reads — bound the set so only the bodies you need are fetched.
 # --limit keeps the latest N (still oldest-first); --since takes RFC3339 or a
 # relative form (24h, 7d, 30m). They compose (--since first, then --limit).
-fibery comments list 42 --db "Development/Dev Task" --limit 3
-fibery comments list 42 --db "Development/Dev Task" --since 24h
+fibery comment list 42 --db "Development/Dev Task" --limit 3
+fibery comment list 42 --db "Development/Dev Task" --since 24h
 
-# Edit / delete a comment by its id (UUID or public id from `comments list`).
+# Edit / delete a comment by its id (UUID or public id from `comment list`).
 # Host entity is inferred — no --db.
 fibery comment edit 36129 "corrected text"
 fibery comment delete 36129 --yes
@@ -391,17 +394,20 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 
 ## Notes
 
-- All entity commands (`get`, `update`, `state`, `delete`, `comment`, `comments list`, `comment-inline`, `doc`) accept UUID, `DT-42`, or `42` — the CLI resolves public IDs internally
+- All entity commands (`get`, `update`, `state`, `delete`, `comment`, `comment list`, `comment-inline`, `doc`) accept UUID, `DT-42`, or `42` — the CLI resolves public IDs internally
+- `fibery get` also accepts a full Fibery URL (then `--db` is inferred); `resolve` is an alias of `get`
+- `fibery comment` unifies the comment surface: `comment add` (default), `comment list`, `comment edit`, `comment delete` — the old `comments list` / `comments add` still work via the `comments` alias
 - `fibery get` returns exit 1 when an entity is not found (not silent success)
 - `fibery state` looks up state UUIDs automatically — just use the state name
-- `fibery search` without `--db` in non-TTY mode lists all available databases
+- `fibery search` without `--db` in non-TTY mode lists all available databases; `search <text>` is sugar for `list <db> --filter "Name~text"`
+- A `--db` that matches no database fails with a "did you mean …?" suggestion of the closest real name
 - `fibery create` / `fibery update` / `fibery import` resolve enum values and user emails by name automatically; unknown field names get a "did you mean …?" hint, and `--skip-invalid` / `--create-missing-enum` make bulk writes forgiving
 - `fibery count` counts server-side, falling back to id-paging on databases that reject aggregates (row-level permissions)
 - `fibery list` / `fibery query` accept `--all` to stream every matching row past Fibery's 3001-row query cap
 - `fibery list` / `fibery query` / `fibery count` accept `--filter "field=value"` (repeatable, ANDed) to build the where-clause without FQL — relations match by public id, enums by name, users by email; mutually exclusive with `--where`
 - `fibery create` prints the new entity's public id and URL by default (or `--public-id` for just the id); `--json` adds `fibery/public-id` and `url`
 - `fibery url <id> --db ...` prints an entity's canonical web URL; `get` / `resolve` detail output includes a URL line
-- `fibery comment edit/delete <comment-id>` edit or remove a comment by the id shown in `comments list` (host entity inferred; `delete` needs `--yes`)
+- `fibery comment edit/delete <comment-id>` edit or remove a comment by the id shown in `comment list` (host entity inferred; `delete` needs `--yes`)
 - `fibery create` / `fibery update` accept `--doc-file "Field=path.md"` to load a document field from a file; `fibery import` sets rich-text fields from their string value
 - `fibery resolve`, `fibery doc get/set/append`, and `fibery docs list` reach space/wiki documents (left-nav pages) via the views API
 - Field names are case-insensitive: `Development/name` auto-corrects to `Development/Name` (canonical name from the cached schema)
@@ -411,7 +417,7 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 - `--json` output on `get` and `resolve` always carries `fibery/id` so scripts don't need a second FQL query
 - `--fields "Name,State"` on `get`/`resolve`/`list` saves significant tokens in agent loops
 - `get`/`resolve` hide rich-text bodies (Description etc.) by default — every scalar/relation field is shown plus a one-line hint naming the hidden docs; add `--docs` to include the bodies, or name a doc field in `--fields`. `--json` is unaffected (it only ever carried document secrets, not bodies)
-- `fibery comments list` accepts `--limit N` (latest N, oldest-first) and `--since <RFC3339|24h|7d|30m>` for incremental re-reads — bodies are fetched only for the comments actually returned
+- `fibery comment list` accepts `--limit N` (latest N, oldest-first) and `--since <RFC3339|24h|7d|30m>` for incremental re-reads — bodies are fetched only for the comments actually returned
 - `fibery delete` and destructive `fibery exec` commands require `--yes` — no accidental data loss
 - `fibery list` and `fibery search` print a stderr signal when results hit `--limit`, so you know there may be more
 - Schema cache older than 7 days prints a stderr warning suggesting `fibery schema sync`

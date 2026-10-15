@@ -15,11 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var commentsCmd = &cobra.Command{
-	Use:   "comments",
-	Short: "Read comments on Fibery entities",
-}
-
 var (
 	commentsListDB    string
 	commentsListLimit int
@@ -49,6 +44,9 @@ Example:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if commentsListDB == "" {
 			return fmt.Errorf("--db is required")
+		}
+		if err := validateDB(commentsListDB); err != nil {
+			return err
 		}
 		if commentsListLimit < 0 {
 			return fmt.Errorf("--limit must be >= 0")
@@ -283,6 +281,7 @@ func init() {
 	commentsListCmd.Flags().StringVar(&commentsListDB, "db", "", "database of the parent entity (e.g. \"Development/Dev Task\")")
 	commentsListCmd.Flags().IntVar(&commentsListLimit, "limit", 0, "return only the latest N comments (rendered oldest-first); 0 = all")
 	commentsListCmd.Flags().StringVar(&commentsListSince, "since", "", "return only comments newer than this — RFC3339 or relative (24h, 7d, 30m)")
-	commentsCmd.AddCommand(commentsListCmd)
-	rootCmd.AddCommand(commentsCmd)
+	// `comment list` is the canonical form; `comments list` keeps working via the
+	// `comments` alias on commentCmd.
+	commentCmd.AddCommand(commentsListCmd)
 }

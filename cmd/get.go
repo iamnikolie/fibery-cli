@@ -24,9 +24,15 @@ var (
 )
 
 var getCmd = &cobra.Command{
-	Use:   "get <fibery-id-or-public-id>",
-	Short: "Get a Fibery entity by ID",
-	Long: `Fetch a single entity. Provide --db with the database name.
+	Use:     "get <id-or-url>",
+	Aliases: []string{"resolve"},
+	Short:   "Get a Fibery entity by ID or URL",
+	Long: `Fetch a single entity. Provide a public ID / "DT-42" / UUID together with
+--db, or a full Fibery URL (then --db is inferred and not needed). A URL may also
+point at a space (lists its databases) or a space/wiki document.
+
+'resolve' is an alias of 'get': "fibery resolve <url>" and "fibery get <url>" are
+identical.
 
 Example (by public ID):
   fibery get 42 --db "Development/Dev Task"
@@ -34,12 +40,23 @@ Example (by public ID):
 Example (by fibery/id UUID):
   fibery get 550e8400-e29b-41d4-a716-446655440000 --db "Development/Dev Task"
 
+Example (by URL — no --db needed):
+  fibery get https://acme.fibery.io/Development/Dev_Task/Some-task-42
+
 Script-friendly (extract the UUID):
   TICKET_UUID=$(fibery get 42 --db "Development/Dev Task" --id-only)`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// A URL arg routes through the resolve path (db inferred from the URL), so
+		// --db is not needed for URLs — which is why `resolve` is a get alias.
+		if strings.HasPrefix(args[0], "http") {
+			return runResolve(cmd, args[0], getIDOnly, getFields, getNoDocs, getDocs)
+		}
 		if getDB == "" {
 			return fmt.Errorf("--db is required (e.g. --db \"Development/Dev Task\")")
+		}
+		if err := validateDB(getDB); err != nil {
+			return err
 		}
 
 		id := args[0]

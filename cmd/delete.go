@@ -25,6 +25,9 @@ Example:
 		if deleteDB == "" {
 			return fmt.Errorf("--db is required")
 		}
+		if err := validateDB(deleteDB); err != nil {
+			return err
+		}
 		if !deleteYes {
 			return fmt.Errorf("delete is destructive — add --yes to confirm (entity %q in %s)", args[0], deleteDB)
 		}

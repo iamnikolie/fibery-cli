@@ -13,127 +13,110 @@ import (
 	"github.com/iamnikolie/fibery-cli/internal/client"
 )
 
-var (
-	resolveIDOnly bool
-	resolveFields []string
-	resolveNoDocs bool
-	resolveDocs   bool
-)
+// runResolve fetches a Fibery entity or space/wiki document by URL. It backs the
+// `get <url>` path and the `resolve` alias: get detects an http(s) arg and
+// delegates here, passing its own --id-only/--fields/--docs/--no-docs flags.
+func runResolve(cmd *cobra.Command, rawURL string, idOnly bool, fields []string, noDocs, docs bool) error {
+	db, publicID, space, err := resolveURL(rawURL)
+	if err != nil {
+		return err
+	}
 
-var resolveCmd = &cobra.Command{
-	Use:   "resolve <url>",
-	Short: "Fetch any Fibery entity by URL",
-	Long: `Fetch a Fibery entity or document by its URL. Handles all entity types.
+	if publicID == "" {
+		return printSpaceSummary(cmd.Context(), space)
+	}
 
-Examples:
-  fibery resolve https://acme.fibery.io/Support_platform/Support_ticket/Fix-signals-5621
-  fibery resolve https://acme.fibery.io/Development/Log-queries-1010
+	// If db couldn't be inferred from URL, the URL is the 2-segment /Space/Slug-id
+	// form — ambiguous: it may be an entity OR a space/wiki document (both share
+	// that shape and can carry the same public id). Resolve both candidates and
+	// disambiguate by which one's name matches the URL slug.
+	if db == "" {
+		slug := normalize(urlTitleSlug(rawURL))
 
-Script-friendly (extract the UUID):
-  TICKET_UUID=$(fibery resolve <url> --id-only)`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		db, publicID, space, err := resolveURL(args[0])
-		if err != nil {
-			return err
+		entity, matchedDB, searchErr := searchSpaceByPublicID(cmd.Context(), space, publicID)
+		if searchErr != nil {
+			return fmt.Errorf("resolve: could not find entity #%s in space %q: %w", publicID, space, searchErr)
+		}
+		entityName := ""
+		if entity != nil {
+			var m map[string]any
+			if json.Unmarshal(entity, &m) == nil {
+				entityName = normalize(asStr(m["Name"]))
+			}
 		}
 
-		if publicID == "" {
-			return printSpaceSummary(cmd.Context(), space)
-		}
-
-		// If db couldn't be inferred from URL, the URL is the 2-segment /Space/Slug-id
-		// form — ambiguous: it may be an entity OR a space/wiki document (both share
-		// that shape and can carry the same public id). Resolve both candidates and
-		// disambiguate by which one's name matches the URL slug.
-		if db == "" {
-			slug := normalize(urlTitleSlug(args[0]))
-
-			entity, matchedDB, searchErr := searchSpaceByPublicID(cmd.Context(), space, publicID)
-			if searchErr != nil {
-				return fmt.Errorf("resolve: could not find entity #%s in space %q: %w", publicID, space, searchErr)
-			}
-			entityName := ""
-			if entity != nil {
-				var m map[string]any
-				if json.Unmarshal(entity, &m) == nil {
-					entityName = normalize(asStr(m["Name"]))
-				}
-			}
-
-			// Clean entity hit (name matches the slug) → don't consult query-views.
-			if entity != nil && entityName == slug {
-				if resolveIDOnly {
-					return printResolvedID(entity)
-				}
-				return printEntityLLM(cmd.Context(), entity, matchedDB, "")
-			}
-
-			// Ambiguous or no entity: consult the document endpoint. Prefer the
-			// document when its name matches the slug, or when there is no entity.
-			docV, _ := cli.QueryView(cmd.Context(), publicID)
-			if docV != nil && docV.DocumentSecret != "" && (normalize(docV.Name) == slug || entity == nil) {
-				if resolveIDOnly {
-					fmt.Println(docV.DocumentSecret)
-					return nil
-				}
-				return printDocumentView(cmd.Context(), docV)
-			}
-
-			if entity == nil {
-				return fmt.Errorf("resolve: #%s not found in space %q (not an entity or space document)", publicID, space)
-			}
-			if resolveIDOnly {
+		// Clean entity hit (name matches the slug) → don't consult query-views.
+		if entity != nil && entityName == slug {
+			if idOnly {
 				return printResolvedID(entity)
 			}
 			return printEntityLLM(cmd.Context(), entity, matchedDB, "")
 		}
 
-		// Build a comprehensive select from schema covering all useful fields
-		schema, _ := cache.LoadSchema(account)
-		sel, docKeys := buildFullSelect(schema, db)
-		sel, docKeys, errNarrow := narrowReadSelect(sel, docKeys, resolveFields, resolveNoDocs, "fibery/id", "Public ID", "Name")
-		if errNarrow != nil {
-			return errNarrow
-		}
-
-		result, err := cli.One(cmd.Context(), client.Command{
-			Command: "fibery.entity/query",
-			Args: map[string]any{
-				"query": map[string]any{
-					"q/from":   db,
-					"q/select": sel,
-					"q/where":  []any{"q/contains-ignoring-case?", []any{"fibery/public-id"}, "$pid"},
-					"q/limit":  5,
-				},
-				"params": map[string]any{"$pid": publicID},
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("resolve: query failed for %s#%s: %w", db, publicID, err)
-		}
-
-		var items []json.RawMessage
-		if err := json.Unmarshal(result, &items); err != nil || len(items) == 0 {
-			return fmt.Errorf("resolve: entity %s not found in %s", publicID, db)
-		}
-
-		matched := items[0]
-		for _, item := range items {
-			var m map[string]any
-			if json.Unmarshal(item, &m) == nil && asStr(m["PublicID"]) == publicID {
-				matched = item
-				break
+		// Ambiguous or no entity: consult the document endpoint. Prefer the
+		// document when its name matches the slug, or when there is no entity.
+		docV, _ := cli.QueryView(cmd.Context(), publicID)
+		if docV != nil && docV.DocumentSecret != "" && (normalize(docV.Name) == slug || entity == nil) {
+			if idOnly {
+				fmt.Println(docV.DocumentSecret)
+				return nil
 			}
+			return printDocumentView(cmd.Context(), docV)
 		}
 
-		if resolveIDOnly {
-			return printResolvedID(matched)
+		if entity == nil {
+			return fmt.Errorf("resolve: #%s not found in space %q (not an entity or space document)", publicID, space)
 		}
-		// Bodies shown only on explicit --docs, or when --fields named a doc field.
-		showDocs := resolveDocs || (len(resolveFields) > 0 && len(docKeys) > 0)
-		return printEntityLLMFull(cmd.Context(), matched, db, docKeys, showDocs)
-	},
+		if idOnly {
+			return printResolvedID(entity)
+		}
+		return printEntityLLM(cmd.Context(), entity, matchedDB, "")
+	}
+
+	// Build a comprehensive select from schema covering all useful fields
+	schema, _ := cache.LoadSchema(account)
+	sel, docKeys := buildFullSelect(schema, db)
+	sel, docKeys, errNarrow := narrowReadSelect(sel, docKeys, fields, noDocs, "fibery/id", "Public ID", "Name")
+	if errNarrow != nil {
+		return errNarrow
+	}
+
+	result, err := cli.One(cmd.Context(), client.Command{
+		Command: "fibery.entity/query",
+		Args: map[string]any{
+			"query": map[string]any{
+				"q/from":   db,
+				"q/select": sel,
+				"q/where":  []any{"q/contains-ignoring-case?", []any{"fibery/public-id"}, "$pid"},
+				"q/limit":  5,
+			},
+			"params": map[string]any{"$pid": publicID},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("resolve: query failed for %s#%s: %w", db, publicID, err)
+	}
+
+	var items []json.RawMessage
+	if err := json.Unmarshal(result, &items); err != nil || len(items) == 0 {
+		return fmt.Errorf("resolve: entity %s not found in %s", publicID, db)
+	}
+
+	matched := items[0]
+	for _, item := range items {
+		var m map[string]any
+		if json.Unmarshal(item, &m) == nil && asStr(m["PublicID"]) == publicID {
+			matched = item
+			break
+		}
+	}
+
+	if idOnly {
+		return printResolvedID(matched)
+	}
+	// Bodies shown only on explicit --docs, or when --fields named a doc field.
+	showDocs := docs || (len(fields) > 0 && len(docKeys) > 0)
+	return printEntityLLMFull(cmd.Context(), matched, db, docKeys, showDocs)
 }
 
 // printResolvedID prints just the fibery/id UUID for --id-only mode.
@@ -343,12 +326,4 @@ func addCollectionItems(ctx context.Context, db, entityID, fieldName string, ite
 		},
 	})
 	return err
-}
-
-func init() {
-	resolveCmd.Flags().BoolVar(&resolveIDOnly, "id-only", false, "output only the fibery/id UUID (for scripting)")
-	resolveCmd.Flags().StringSliceVar(&resolveFields, "fields", nil, "comma-separated field aliases to return (saves tokens; e.g. \"Name,State,Priority\")")
-	resolveCmd.Flags().BoolVar(&resolveDocs, "docs", false, "include rich-text document bodies (Description etc.) — off by default to save tokens")
-	resolveCmd.Flags().BoolVar(&resolveNoDocs, "no-docs", false, "also drop document secret keys from --json (rendered bodies are already hidden by default)")
-	rootCmd.AddCommand(resolveCmd)
 }

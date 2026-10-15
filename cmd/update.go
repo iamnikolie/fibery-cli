@@ -44,6 +44,9 @@ Examples:
 		if updateDB == "" {
 			return fmt.Errorf("--db is required")
 		}
+		if err := validateDB(updateDB); err != nil {
+			return err
+		}
 		entityID, err := resolveEntityRef(cmd.Context(), updateDB, args[0])
 		if err != nil {
 			return err

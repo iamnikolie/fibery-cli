@@ -1,11 +1,58 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
 	"github.com/iamnikolie/fibery-cli/internal/cache"
 )
+
+// validateDB returns a "did you mean" error when db is not a known database in
+// the cached schema and a close match exists. It returns nil when db is known,
+// when nothing is close (an unknown-but-not-close db still passes through to the
+// API, which reports its own error — avoids false rejects on a stale cache), or
+// when there is no usable cache to check against.
+func validateDB(db string) error {
+	schema, err := cache.LoadSchema(account)
+	if err != nil {
+		return nil
+	}
+	dbs := listDatabases(schema)
+	for _, d := range dbs {
+		if d == db {
+			return nil
+		}
+	}
+	if suggestion, ok := closestDatabase(db, dbs); ok {
+		return fmt.Errorf("database %q not found — did you mean %q? (run 'fibery schema sync' if it's new, or 'fibery search' to list databases)", db, suggestion)
+	}
+	return nil
+}
+
+// closestDatabase returns the candidate database name closest to db and true when
+// it is within the typo threshold. It compares both the full "Space/Database"
+// string and the local (post-slash) name case-insensitively, so it catches both
+// ordinary typos and a dropped space prefix (e.g. "Dev Task" → "Development/Dev Task").
+func closestDatabase(db string, candidates []string) (string, bool) {
+	full := strings.ToLower(db)
+	local := strings.ToLower(localName(db))
+	best := ""
+	bestDist := 1 << 30
+	for _, c := range candidates {
+		d := levenshtein(full, strings.ToLower(c))
+		if dl := levenshtein(local, strings.ToLower(localName(c))); dl < d {
+			d = dl
+		}
+		if d < bestDist {
+			bestDist, best = d, c
+		}
+	}
+	if best == "" || bestDist > 4 {
+		return "", false
+	}
+	return best, true
+}
 
 // normalize removes all non-alphanumeric characters and lowercases a string.
 func normalize(s string) string {

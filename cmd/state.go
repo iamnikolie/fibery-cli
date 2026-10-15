@@ -26,6 +26,9 @@ Examples:
 		if stateDB == "" {
 			return fmt.Errorf("--db is required")
 		}
+		if err := validateDB(stateDB); err != nil {
+			return err
+		}
 		entityID, err := resolveEntityRef(cmd.Context(), stateDB, args[0])
 		if err != nil {
 			return err

@@ -25,15 +25,23 @@ Env alt: `FIBERY_CONFIG=personal fibery ...`
 All `--db` values use `"Space/Database"` format exactly as in Fibery:
 - `"Development/Dev Task"`, `"Support platform/Support ticket"`, `"Product Management/User-Story"`
 
-When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY mode it prints all available databases.
+When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY mode it prints all available databases. If you pass a `--db` that doesn't exist, the error suggests the closest real database name.
+
+## Reading an entity — start with `context`
+
+To grok a ticket/entity, reach for **`fibery context <id>`** first: it returns the
+entity (curated fields + document bodies + all comments) **and** its headline graph
+(parent / children / blockers / MRs / bugs) in one call. Drop to `fibery get <id-or-url>`
+(its `resolve` alias also takes URLs) when you want a single entity without the graph, or
+`fibery comment list <id>` for just the discussion.
 
 ## Command reference
 
 | Command | Description | Key flags |
 |---------|-------------|-----------|
-| `fibery search <text>` | Find entities by name | `--db`, `--limit` (default 20) |
-| `fibery get <id>` | Fetch one entity by public ID, prefixed ID, or UUID — all scalar/relation fields + URL; doc bodies hidden by default | `--db` (required), `--id-only`, `--fields`, `--docs`, `--no-docs` |
-| `fibery resolve <url>` | Fetch entity OR space/wiki document by Fibery URL — doc bodies hidden by default | `--id-only`, `--fields`, `--docs`, `--no-docs` |
+| `fibery search <text>` | Find entities by name (sugar for `list <db> --filter "Name~text"`; without `--db` it lists all databases) | `--db`, `--limit` (default 20) |
+| `fibery get <id-or-url>` | Fetch one entity by public ID, prefixed ID, UUID, **or Fibery URL** — all scalar/relation fields + URL; doc bodies hidden by default | `--db` (required unless a URL is given), `--id-only`, `--fields`, `--docs`, `--no-docs` |
+| `fibery resolve <url>` | **Alias of `get`** (`get` accepts URLs directly). A URL may target an entity, a space (→ lists its databases), or a space/wiki document | same as `get` |
 | `fibery context init <db>` | Print a heuristic draft context profile (keep/docs/edges) for a database; `--save` persists it | `--save` |
 | `fibery context <id>` | One-shot curated context bundle: root entity (fields + docs + all comments) + headline graph (parent/children/blockers/MRs/bugs) | `--db`, `--parents-full`, `--no-comments`, `--no-docs`, `--format` |
 | `fibery url <id>` | Print the canonical web URL for an entity (paste into comments/docs/Slack) | `--db` (required) |
@@ -46,10 +54,10 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 | `fibery exec <json>` | Send any raw Fibery command; destructive ones require `--yes` | `--yes` (for delete/remove/drop) |
 | `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required), `--create-missing-enum` |
 | `fibery state <id> <state-name>` | Set workflow state (case-insensitive) | `--db` (required) |
-| `fibery comment <url-or-id> [text]` | Add comment; optionally @mention users, reference entities, reply, or embed screenshots/images inline | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>`, `--image <path>` (repeatable), `--clipboard` |
+| `fibery comment <url-or-id> [text]` | Add comment (explicit form `comment add`); optionally @mention users, reference entities, reply, or embed screenshots/images inline | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>`, `--image <path>` (repeatable), `--clipboard` |
+| `fibery comment list <id>` | List comments on an entity with author, date, comment id, and markdown body (`comments list` also works) | `--db` (required), `--limit` (latest N), `--since` (RFC3339\|24h\|7d) |
 | `fibery comment edit <comment-id> <text>` | Replace a comment's body (host entity inferred) | — |
 | `fibery comment delete <comment-id>` | Delete a comment (host entity inferred) | `--yes` (required) |
-| `fibery comments list <id>` | List comments on an entity with author, date, comment id, and markdown body | `--db` (required), `--limit` (latest N), `--since` (RFC3339\|24h\|7d) |
 | `fibery comment-inline list <url-or-id>` | List inline (document) comments: thread id, state, anchored text, body, replies | `--db`, `--field` |
 | `fibery comment-inline add <url-or-id> --on "<text>" "<body>"` | Add an inline comment anchored to a text substring | `--db`, `--field`, `--on` (required), `--occurrence <N>` |
 | `fibery comment-inline reply <url-or-id> --thread <id> "<body>"` | Reply within an inline comment thread | `--db`, `--field`, `--thread` (required) |
@@ -83,7 +91,7 @@ When `--db` is unknown, call `fibery search "x"` without `--db` — in non-TTY m
 
 ## ID formats
 
-All entity commands (`get`, `update`, `state`, `comment`, `comments list`, `comment-inline`, `delete`, `doc`, `url`) accept:
+All entity commands (`get`, `update`, `state`, `comment`, `comment list`, `comment-inline`, `delete`, `doc`, `url`) accept:
 - UUID: `550e8400-e29b-41d4-a716-446655440000`
 - Public ID: `42`
 - Prefixed public ID: `DT-42` (prefix is stripped automatically)
@@ -92,7 +100,7 @@ The CLI resolves public IDs to UUIDs internally via a one-shot FQL lookup, so
 no separate `get --id-only` round-trip is needed.
 
 `comment edit`/`comment delete` take a comment id (the UUID or public id shown by
-`comments list`). Comments live in the system database `comments/comment` — you
+`comment list`). Comments live in the system database `comments/comment` — you
 rarely need that name, but `fibery schema show comments/comment` works if you do.
 
 ## Inline (document) comments
@@ -269,7 +277,7 @@ additionally strips those secret keys from `--json` for minimal output.
 `fibery context <id>` assembles, in one call, everything an agent needs to grok an
 entity: the root rendered full (curated fields + document bodies + all comments)
 plus its connected graph — parent epic/story, children, blockers, merge requests,
-bugs — as a headline table. It replaces the manual `resolve` + `comments list` +
+bugs — as a headline table. It replaces the manual `get`/`resolve` + `comment list` +
 per-neighbor `get` dance.
 
 Two phases. Curation is driven by a per-database **profile** the agent bootstraps
@@ -310,13 +318,13 @@ that resolve to the same entity are expanded once).
 ## Reading discussions
 
 ```bash
-fibery comments list 42 --db "Development/Dev Task"
-fibery comments list DT-42 --db "Development/Dev Task"
+fibery comment list 42 --db "Development/Dev Task"      # `comments list` also works
+fibery comment list DT-42 --db "Development/Dev Task"
 
 # Incremental re-reads — fetch only the bodies you need:
-fibery comments list 42 --db "Development/Dev Task" --limit 3      # latest 3, oldest-first
-fibery comments list 42 --db "Development/Dev Task" --since 24h    # added in the last day
-fibery comments list 42 --db "Development/Dev Task" --since 2026-06-20T00:00:00Z
+fibery comment list 42 --db "Development/Dev Task" --limit 3      # latest 3, oldest-first
+fibery comment list 42 --db "Development/Dev Task" --since 24h    # added in the last day
+fibery comment list 42 --db "Development/Dev Task" --since 2026-06-20T00:00:00Z
 ```
 
 Returns each comment as a Markdown section with author, RFC3339 datetime, and
@@ -358,7 +366,7 @@ fibery comment 42 --db "Development/Dev Task" "see context" \
 
 ### Edit / delete a comment
 
-`fibery comments list` prints each comment's id (`_id: <uuid> · #<public-id>_`).
+`fibery comment list` prints each comment's id (`_id: <uuid> · #<public-id>_`).
 Pass either form to edit or delete — the host entity is inferred, so no `--db`:
 
 ```bash
