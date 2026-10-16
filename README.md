@@ -276,7 +276,8 @@ fibery doc set <document-secret> "# Title\n\nContent here"
 fibery doc get <uuid> --db "Development/Dev Task" --field "Development/Description"
 fibery doc set <uuid> "# Title\n\nContent" --db "Development/Dev Task" --field "Development/Description"
 
-# Append instead of replacing
+# Append instead of replacing; the existing body (inline comments, embedded views,
+# mentions) stays untouched — only the appended Markdown is converted
 fibery doc append <uuid> "## More\n\ntext" --db "Development/Dev Task" --field "Development/Description"
 
 # Force secret mode when a raw secret is UUID-shaped (otherwise read as an entity id)
@@ -301,8 +302,9 @@ fibery doc set    "https://acme.fibery.io/Development/My-Doc-280" "# New body"
 fibery doc append "https://acme.fibery.io/Development/My-Doc-280" "appended line"
 ```
 
-> Writes round-trip through Fibery's markdown normalizer, which strips trailing-whitespace
-> hard line breaks (cosmetic — content is preserved). The views endpoint is undocumented
+> `doc set` round-trips through Fibery's markdown normalizer, which strips trailing-whitespace
+> hard line breaks (cosmetic) and replaces the whole body, inline comments and embedded views
+> included. `doc append` leaves the existing body as is. The views endpoint is undocumented
 > and may change.
 
 You can also get a document secret manually via FQL:

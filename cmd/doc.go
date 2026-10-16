@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -120,8 +119,12 @@ func resolveDocSecretByURL(ctx context.Context, rawURL string) (string, error) {
 var docAppendCmd = &cobra.Command{
 	Use:   "append <secret|id|url> <markdown-text>",
 	Short: "Append Markdown to the end of a document",
-	Long: `Append Markdown to a document's existing content (separated by a blank line).
-Accepts a secret, a space-document URL, or an entity ID with --db and --field.
+	Long: `Append Markdown to the end of a document. Accepts a secret, a space-document URL,
+or an entity ID with --db and --field.
+
+The existing content is kept as is — inline comments, embedded views, mentions and
+anything else Markdown cannot express survive. Only the appended part goes through
+Markdown, converted by Fibery itself.
 
 Examples:
   fibery doc append abc123secret "## New section\n\nMore text"
@@ -133,16 +136,18 @@ Examples:
 		if err != nil {
 			return err
 		}
-		existing, err := cli.GetDocument(cmd.Context(), secret)
+		addition, err := cli.MarkdownToDocJSON(cmd.Context(), unescapeDocContent(args[1]))
 		if err != nil {
 			return err
 		}
-		addition := unescapeDocContent(args[1])
-		combined := addition
-		if strings.TrimSpace(existing) != "" {
-			combined = strings.TrimRight(existing, "\n") + "\n\n" + addition
+		doc, err := cli.GetDocumentJSON(cmd.Context(), secret)
+		if err != nil {
+			return err
 		}
-		if err := cli.SetDocument(cmd.Context(), secret, combined); err != nil {
+		if err := appendDocNodes(&doc.Content, addition); err != nil {
+			return err
+		}
+		if err := cli.SetDocumentJSON(cmd.Context(), secret, doc.Content); err != nil {
 			return err
 		}
 		fmt.Println("Document updated.")

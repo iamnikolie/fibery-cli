@@ -330,6 +330,42 @@ func (c *Client) SetDocumentJSON(ctx context.Context, secret string, content Doc
 	return nil
 }
 
+// MarkdownToDocJSON converts Markdown to a ProseMirror doc using Fibery's own
+// converter: it writes the Markdown to a scratch document, reads it back as JSON
+// and deletes the scratch document. The result carries fresh node ids, so its
+// nodes can be spliced into another document.
+func (c *Client) MarkdownToDocJSON(ctx context.Context, markdown string) (json.RawMessage, error) {
+	secret := newUUID()
+	body, err := json.Marshal(map[string]any{
+		"command": "create-or-update-documents",
+		"args":    []any{map[string]any{"secret": secret, "content": markdown}},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("client.MarkdownToDocJSON: marshal: %w", err)
+	}
+	if _, err := c.request(ctx, http.MethodPost, "/api/documents/commands?format=md", body); err != nil {
+		return nil, fmt.Errorf("client.MarkdownToDocJSON: create scratch: %w", err)
+	}
+	defer c.deleteDocument(ctx, secret)
+	d, err := c.GetDocumentJSON(ctx, secret)
+	if err != nil {
+		return nil, fmt.Errorf("client.MarkdownToDocJSON: %w", err)
+	}
+	return d.Content.Doc, nil
+}
+
+// deleteDocument removes a document by secret. Best-effort: a failure leaves an
+// orphan document no entity points at, so it is only reported in --verbose.
+func (c *Client) deleteDocument(ctx context.Context, secret string) {
+	body, _ := json.Marshal(map[string]any{
+		"command": "delete-documents",
+		"args":    []any{map[string]any{"secret": secret}},
+	})
+	if _, err := c.request(ctx, http.MethodPost, "/api/documents/commands", body); err != nil && c.Verbose {
+		fmt.Fprintf(os.Stderr, "client: delete scratch document %s: %v\n", secret, err)
+	}
+}
+
 // NewUUID returns a random UUID v4 (exported wrapper around the internal generator).
 func NewUUID() string { return newUUID() }
 

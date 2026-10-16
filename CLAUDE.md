@@ -45,7 +45,8 @@ cmd/
   state.go                     workflow state change
   comment.go                   add comment (URL or UUID); --mention / --ref / --reply-to
   mention.go                   mention & reference token helpers used by comment.go
-  doc.go                       doc get / doc set (by secret or by UUID+field)
+  doc.go                       doc get / set / append (by secret, URL or UUID+field)
+  utils_doc.go                 ProseMirror doc splicing for doc append
   files.go                     files list / download (attachments)
   import.go                    bulk import from JSON array file
   exec.go                      raw passthrough to POST /api/commands
@@ -212,6 +213,15 @@ These are not documented anywhere except in the wild; encode them into helpers r
     It is NOT the `entity` node with `typeId = fibery/view` (markdown `[[#^…]]`) — that is
     a reference to a view entity, not an inline view. A `member` token cannot create `container-type:
     "app"` (left-nav) views; entity-owned ones work. `fibery view` encodes all of this.
+
+17. **No known Markdown → ProseMirror endpoint, but any secret is a document.**
+    `POST /api/documents/commands?format=md` `create-or-update-documents` creates a
+    document for a fresh secret with no owning entity; read it back with `?format=json`
+    and remove it with `delete-documents` `{"secret": ...}` (no `?format`). Nodes come
+    back with fresh `attrs.id`/`guid`, so they splice into another doc safely.
+    `client.MarkdownToDocJSON` does this; `doc append` uses it so the existing body
+    never goes through Markdown (a Markdown read-modify-write drops inline comments
+    and `fiberyView` nodes).
 
 ---
 

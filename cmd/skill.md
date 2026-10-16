@@ -65,7 +65,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery comment-inline delete <url-or-id> --thread <id>` | Delete an inline comment thread | `--db`, `--field`, `--thread` (required) |
 | `fibery doc get <secret\|id\|url>` | Get document as Markdown | `--db`, `--field` (entity ID), `--secret` (raw UUID secret) |
 | `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
-| `fibery doc append <secret\|id\|url> <md>` | Append Markdown to a document | `--db`, `--field`, `--secret` |
+| `fibery doc append <secret\|id\|url> <md>` | Append Markdown to the end of a document; existing content (inline comments, views, mentions) is kept untouched | `--db`, `--field`, `--secret` |
 | `fibery wiki list` | List space/wiki documents (left-nav pages); `docs list` also works | `--space`, `--limit` |
 | `fibery view create` | Create a list/table view over a database; `--embed` puts it inline in an entity's rich text | `--db`, `--name` (required), `--type list\|table`, `--filter` (repeatable), `--any`, `--where`, `--params`, `--embed`, `--embed-db`, `--embed-field`, `--after-heading` |
 | `fibery view embed <view>` | Insert an existing view (uuid or public id) inline into a rich-text field | `--embed` (required), `--embed-db`, `--embed-field`, `--after-heading` |
@@ -570,7 +570,8 @@ fibery doc set abc123secret "# Title\nContent here"
 fibery doc get <uuid> --db "Development/Dev Task" --field "Development/Description"
 fibery doc set <uuid> "# Title\nContent" --db "Development/Dev Task" --field "Development/Description"
 
-# Append instead of replacing (any of secret / id / url)
+# Append instead of replacing (any of secret / id / url). Safe on documents with
+# inline comments or embedded views: only the appended part goes through Markdown.
 fibery doc append <uuid> "## New section\n\nmore" --db "Development/Dev Task" --field "Development/Description"
 
 # If a raw document secret happens to be UUID-shaped, force secret mode with --secret
@@ -592,8 +593,10 @@ fibery doc get    "https://acme.fibery.io/Development/My-Doc-280"
 fibery doc set    "https://acme.fibery.io/Development/My-Doc-280" "# New body"
 fibery doc append "https://acme.fibery.io/Development/My-Doc-280" "appended line"
 ```
-Note: writing a document round-trips through Fibery's markdown normalizer, which
-drops trailing-whitespace hard line breaks (cosmetic; content is preserved).
+Note: `doc set` round-trips through Fibery's markdown normalizer, which drops
+trailing-whitespace hard line breaks (cosmetic) and rewrites the whole body —
+inline comments and embedded views are lost. `doc append` does not touch the
+existing body.
 
 **List / download file attachments:**
 ```bash
