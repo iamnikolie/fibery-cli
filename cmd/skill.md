@@ -74,7 +74,10 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery view rename <view> <name>` | Rename a view | — |
 | `fibery view delete <view>...` | Delete one or more views; an entity-owned view's inline blocks are removed too | `--yes` (required) |
 | `fibery folder list` | Left-nav folders with space, parent, views and subfolders | `--space`, `--empty` |
+| `fibery folder create <space> <path>` | Create a folder path like "Archive/LINC" (existing parts reused) | — |
 | `fibery folder delete <id>...` | Delete empty folders (nested ones only when named too; children first) | `--yes` (required) |
+| `fibery view move <view>...` | Move views or wiki documents to a space and folder; nested pages are taken out of their parent | `--space` (required), `--folder <path>` |
+| `fibery wiki create` | New wiki document from a Markdown file, or a copy of an entity's rich text (JSON, formatting kept) | `--space`, `--name` (required), `--folder`, `--file` \| `--from <id> --from-db <db> [--from-field]` |
 | `fibery space list` | The workspace's own spaces with databases, views, wiki documents, folders | `--json` |
 | `fibery space delete <space>` | Delete a space with no databases (fibery.app/uninstall); built-in spaces refused | `--dry-run`, `--yes` (required) |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |

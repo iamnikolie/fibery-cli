@@ -428,6 +428,8 @@ type ViewRecord struct {
 	ContainerEntityID     string
 	ContainerEntityTypeID string
 	FolderID              string
+	// ParentPageID is set for a document nested under another document.
+	ParentPageID string
 	// Meta is the raw fibery/meta: items[].query (q/from = database type id),
 	// axes (x/y) for boards, filters and units — all keyed by type and field ids.
 	Meta json.RawMessage
@@ -450,6 +452,7 @@ type viewRaw struct {
 	Folder   *struct {
 		ID string `json:"fibery/id"`
 	} `json:"fibery/Folder"`
+	ParentPage   *string `json:"fibery/parent-page-id"`
 	ContainerApp struct {
 		ID string `json:"fibery/id"`
 	} `json:"fibery/container-app"`
@@ -469,7 +472,12 @@ func (r viewRaw) toRecord() ViewRecord {
 	if r.Folder != nil {
 		folder = r.Folder.ID
 	}
+	parent := ""
+	if r.ParentPage != nil {
+		parent = *r.ParentPage
+	}
 	return ViewRecord{
+		ParentPageID:          parent,
 		FolderID:              folder,
 		ID:                    r.ID,
 		Name:                  r.Name,
@@ -587,6 +595,28 @@ func (c *Client) QueryFolders(ctx context.Context) ([]FolderRecord, error) {
 		}
 	}
 	return out, nil
+}
+
+// CreateFolders creates folders ("create-folders"); each value carries
+// fibery/id, fibery/name, fibery/container-app and optionally fibery/Parent Folder.
+func (c *Client) CreateFolders(ctx context.Context, values []map[string]any) error {
+	if _, err := c.viewRPC(ctx, "create-folders", map[string]any{"values": values}); err != nil {
+		return fmt.Errorf("client.CreateFolders: %w", err)
+	}
+	return nil
+}
+
+// CreateDocumentMarkdown creates (or overwrites) the document behind secret
+// from Markdown — a fresh secret becomes a new document.
+func (c *Client) CreateDocumentMarkdown(ctx context.Context, secret, markdown string) error {
+	body, _ := json.Marshal(map[string]any{
+		"command": "create-or-update-documents",
+		"args":    []any{map[string]any{"secret": secret, "content": markdown}},
+	})
+	if _, err := c.request(ctx, http.MethodPost, "/api/documents/commands?format=md", body); err != nil {
+		return fmt.Errorf("client.CreateDocumentMarkdown: %w", err)
+	}
+	return nil
 }
 
 // DeleteFolders deletes folders by id ("delete-folders").

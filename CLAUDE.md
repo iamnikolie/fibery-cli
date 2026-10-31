@@ -59,6 +59,7 @@ cmd/
   view.go                      view create (list/table/board) / embed / list / delete (views JSON-RPC)
   view_show.go                 view show / rename
   space.go                     space list/delete (fibery.app/uninstall), folder list/delete (query-/delete-folders)
+  wiki_move.go                 folder create, view move, wiki create (from Markdown or an entity's rich text)
   utils_view.go                pure view helpers: filter → field-id meta, inline-view node insert/remove
   utils_enum.go                shared resolvers: field value → API value, enum/user/doc lookups
   *_test.go                    per-command unit tests (pure logic, no network)
@@ -233,6 +234,13 @@ These are not documented anywhere except in the wild; encode them into helpers r
     `fibery/preinstalled? true`. `fibery.app/uninstall {"fibery/id": <app id>}`
     removes a space (`fibery.app/delete` also exists). `space delete` refuses a
     space that still has databases.
+    `create-folders {"values": [{fibery/id, fibery/name, fibery/container-app,
+    fibery/Parent Folder?}]}`. Moving a view or wiki document is `update-views`
+    with `fibery/container-app`, `fibery/Folder` and `fibery/parent-page-id`
+    (null takes a nested page out of its parent). Pages nested under a moved
+    document follow it to the new space. A wiki document is a view of type
+    `document` with `meta.documentSecret`; create the document first
+    (`create-or-update-documents`), then the view (`wiki create`).
 
 17. **No known Markdown → ProseMirror endpoint, but any secret is a document.**
     `POST /api/documents/commands?format=md` `create-or-update-documents` creates a
