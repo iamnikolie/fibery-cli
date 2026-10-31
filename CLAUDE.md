@@ -38,6 +38,7 @@ cmd/
   schema_db.go                 schema refs, schema db delete (helper-type discovery, atomic delete batch)
   schema_db_create.go          schema db create (type + mixins batch, workflow state replacement)
   schema_field.go              schema field add/delete/rename, schema db rename (pure batch builders)
+  move.go                      move: copy entities between databases (plan, files re-uploaded, comments, mention remap)
   export.go                    export: databases/spaces → Markdown + JSON archive, files relinked locally
   search.go                    fibery search
   list.go                      fibery list
@@ -277,6 +278,11 @@ These are not documented anywhere except in the wild; encode them into helpers r
     drop a built-in state, move the field's `fibery/default-value` first.
     `fibery/creation-date` / `fibery/created-by` are accepted on entity create,
     and on `comments/comment` (with `comment/author`) — migrations keep authors and dates.
+    A user field's back side lives in the `user` space, named
+    `user/<DB> (<Space> - <Field>)`; a checkbox needs `default-value false` +
+    `required? true` or "= false" filters miss unticked entities.
+    Files referenced by a document keep serving right after their entity is
+    deleted, but archives show some 404 later — `move` re-uploads them.
 
 ---
 

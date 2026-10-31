@@ -88,6 +88,12 @@ fibery schema enums "Development/Dev Task"  # enum values with fibery/id
 fibery schema refs "Development/Dev Task"   # relations out/in + helper types (enums, workflow)
 ```
 
+Move entities to another database (fields by name; docs, files, comments, authors and dates kept; source untouched):
+
+```bash
+fibery move "Old/Tasks" --to "New/Work" --legacy-id "Legacy ID" --set Project=Old --dry-run
+```
+
 Change the schema:
 
 ```bash
@@ -98,6 +104,7 @@ fibery schema db delete "Space/Database" --delete-entities --yes   # also when i
 fibery schema db rename "Space/Task" Tasks --yes
 fibery schema field add "Space/Database" Project --type single-select --option Alpha --option Beta --default Alpha --yes
 fibery schema field add "Space/Database" Epic --type relation --to "Space/Epic" --yes
+fibery schema field add "Space/Database" Assignee --type user --many --yes
 fibery schema field rename "Space/Database" Epic Parent --yes
 fibery schema field delete "Space/Database" Parent --delete-values --yes
 ```

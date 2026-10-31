@@ -52,6 +52,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery update <id> [field=value...]` | Update entity; repeat field to append to multi-select | `--db` (required), `--doc`, `--doc-file`, `--skip-invalid`, `--create-missing-enum` |
 | `fibery delete <id>` | Delete entity (requires `--yes`) | `--db` (required), `--yes` (required) |
 | `fibery exec <json>` | Send any raw Fibery command; destructive ones require `--yes` | `--yes` (for delete/remove/drop) |
+| `fibery move <db> --to <db>` | Copy entities to another database: fields by name, rich text as JSON, files and pasted images re-uploaded, comments with author/date/replies, creation date and author kept; source untouched; re-runs skip copied ones | `--to`, `--legacy-id` (required), `--set`, `--state-map`, `--text`, `--filter`, `--limit`, `--out`, `--dry-run`, `--yes` |
 | `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required), `--create-missing-enum` |
 | `fibery state <id> <state-name>` | Set workflow state (case-insensitive) | `--db` (required) |
 | `fibery comment <url-or-id> [text]` | Add comment (explicit form `comment add`); optionally @mention users, reference entities, reply, or embed screenshots/images inline | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>`, `--image <path>` (repeatable), `--clipboard` |
@@ -691,6 +692,30 @@ fibery schema enums "Development/Dev Task"     # enum values with fibery/id
 fibery schema refs "Development/Dev Task"      # relations out/in + helper types (enums, workflow)
 ```
 
+## Moving entities between databases
+
+`fibery move` copies a database's entities into another one, e.g. to merge
+several Tasks/Bugs databases into one. Fields match by their name inside the
+space (`Old/Priority` → `New/Priority`); the plan lists every mapping and every
+dropped field before anything happens.
+
+```bash
+fibery move "Old/Tasks" --to "New/Work" --legacy-id "Legacy ID" \
+  --set Type=Task --set Project=Old --set Archive=true \
+  --state-map Done=Released --text "Old/Module=New/Legacy module" --dry-run
+```
+
+- Kept: title, values, single-selects (by option name), users, rich text as
+  Fibery JSON (inline comments too), attachments and images pasted into
+  documents (downloaded and uploaded again), workflow state by name, creation
+  date, author, rank, comments with author, date and replies. Mentions between
+  moved entities are pointed at the copies.
+- `--legacy-id` (required) gets `"Old/Tasks #42"`; entities whose value is
+  already there are skipped, so a failed run is simply repeated.
+- `--set` fills a field on every copy; `--text` writes a relation's titles into
+  a text field; `--filter` moves a subset. The source is never changed —
+  delete it with `schema db delete` once the copy is checked.
+
 ## Changing the schema
 
 Schema mutations go through `fibery schema db …` — never hand-build a
@@ -707,6 +732,7 @@ fibery schema db rename "Space/Task" Tasks --yes               # stays in its sp
 fibery schema field add "Space/Database" Project --type single-select \
   --option Alpha --option Beta --default Alpha --dry-run
 fibery schema field add "Space/Database" Epic --type relation --to "Space/Epic" --yes
+fibery schema field add "Space/Database" Assignee --type user --many --yes   # back field in the user space
 fibery schema field add "Space/Database" Link --type url --yes
 fibery schema field rename "Space/Database" Link Website --yes
 fibery schema field delete "Space/Database" Website --delete-values --yes
