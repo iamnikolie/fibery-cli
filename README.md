@@ -349,6 +349,12 @@ fibery view embed 2930 --embed 3947 --embed-db "Development/bug"   # existing vi
 fibery view list --space Development --type table
 fibery view list --owner 3947
 fibery view delete 2930 --yes   # removes the inline block from the owner too
+fibery view create --db "Space/Work" --name "Board" --type board --rows "Space/Project"   # kanban: columns = state
+fibery view show 306            # place, databases, board axes by name (--json: raw meta)
+fibery view rename 306 "All work"
+fibery view list --dead         # views whose databases were deleted
+fibery view list --db "Space/Work"
+fibery view delete 81 88 95 --yes
 ```
 
 `--filter` uses the `field<op>value` syntax of `query --filter` (`=`, `!=`, `~` contains);

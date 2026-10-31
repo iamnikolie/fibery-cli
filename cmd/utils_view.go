@@ -4,16 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/iamnikolie/fibery-cli/internal/client"
 )
 
-// viewTypes are the view kinds `view create` can build. Both share the
-// items[0].{query,params,filter,units} meta shape; board/timeline/calendar need
-// axis config this command does not author.
-var viewTypes = map[string]bool{"list": true, "table": true}
+// viewTypes are the view kinds `view create` can build. All share the
+// items[0].{query,params,filter,units} meta shape; a board adds axes: meta.x/y
+// {type ":axis-type/objects", query {q/from <axis field's type id>}} and
+// items[0].xExpression/yExpression [<field id>].
+var viewTypes = map[string]bool{"list": true, "table": true, "board": true}
 
 // schemaField is one field of a database in the cached schema.
 type schemaField struct {
@@ -210,6 +212,10 @@ type viewSpec struct {
 	// Owner, when set, makes the view entity-owned (container-type "object") —
 	// what Fibery creates for a view embedded in that entity's rich text.
 	Owner *viewOwner
+	// Board axes: field ids grouped into columns (X) and rows (Y), and the type
+	// ids those fields point at. Y is optional.
+	XField, XType string
+	YField, YType string
 }
 
 type viewOwner struct {
@@ -262,11 +268,22 @@ func buildViewRecord(s viewSpec) map[string]any {
 			"operator": op, "value": leaves,
 		}
 	}
+	meta := map[string]any{"items": []any{item}}
+	if s.XField != "" {
+		item["xExpression"] = []any{s.XField}
+		item["yExpression"] = nil
+		meta["x"] = map[string]any{"type": ":axis-type/objects", "query": map[string]any{"q/from": s.XType}}
+		meta["y"] = nil
+		if s.YField != "" {
+			item["yExpression"] = []any{s.YField}
+			meta["y"] = map[string]any{"type": ":axis-type/objects", "query": map[string]any{"q/from": s.YType}}
+		}
+	}
 	rec := map[string]any{
 		"fibery/id":             s.ID,
 		"fibery/name":           s.Name,
 		"fibery/type":           s.Type,
-		"fibery/meta":           map[string]any{"items": []any{item}},
+		"fibery/meta":           meta,
 		"fibery/container-app":  map[string]any{"fibery/id": s.AppID},
 		"fibery/container-type": "app",
 	}
@@ -561,4 +578,94 @@ func richTextFields(schema map[string]any, db string) []string {
 		}
 	}
 	return out
+}
+
+// viewMeta is the part of a view's fibery/meta that names databases and axes.
+type viewMeta struct {
+	X     *viewAxis `json:"x"`
+	Y     *viewAxis `json:"y"`
+	Items []struct {
+		Query struct {
+			From  string `json:"q/from"`
+			Where any    `json:"q/where"`
+		} `json:"query"`
+		XExpression []string `json:"xExpression"`
+		YExpression []string `json:"yExpression"`
+	} `json:"items"`
+}
+
+type viewAxis struct {
+	Type  string `json:"type"`
+	Query struct {
+		From string `json:"q/from"`
+	} `json:"query"`
+	Enums map[string]struct {
+		Query struct {
+			From string `json:"q/from"`
+		} `json:"query"`
+	} `json:"enums"`
+}
+
+// viewDBTypeIDs returns the database type ids a view reads: items[].query.q/from
+// (a board over several databases has one item per database; its x axis then
+// maps each database id to that database's state type under x.enums).
+func viewDBTypeIDs(raw json.RawMessage) []string {
+	var m viewMeta
+	if len(raw) == 0 || json.Unmarshal(raw, &m) != nil {
+		return nil
+	}
+	var ids []string
+	for _, it := range m.Items {
+		if it.Query.From != "" {
+			ids = append(ids, it.Query.From)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// viewDBNames resolves viewDBTypeIDs against the schema; dead reports a view
+// that reads databases and none of them exists any more.
+func viewDBNames(schema map[string]any, raw json.RawMessage) (names []string, dead bool) {
+	ids := viewDBTypeIDs(raw)
+	live := 0
+	for _, id := range ids {
+		if n := typeNameByID(schema, id); n != "" {
+			names = append(names, n)
+			live++
+		} else {
+			names = append(names, "<deleted>")
+		}
+	}
+	return names, len(ids) > 0 && live == 0
+}
+
+// fieldNameByID finds a field's name by its fibery/id in any type.
+func fieldNameByID(schema map[string]any, id string) string {
+	for _, t := range mustSlice(schema["fibery/types"]) {
+		tm, _ := t.(map[string]any)
+		for _, f := range mustSlice(tm["fibery/fields"]) {
+			if fm, ok := f.(map[string]any); ok && asStr(fm["fibery/id"]) == id {
+				return asStr(fm["fibery/name"])
+			}
+		}
+	}
+	return ""
+}
+
+// boardAxis resolves a board axis field: it must be a single (non-collection)
+// field pointing at another type — a workflow state, single-select or relation.
+func boardAxis(schema map[string]any, db, name string) (fieldID, typeID string, err error) {
+	f, ok := lookupSchemaField(schema, db, qualifyField(db, name))
+	if !ok {
+		return "", "", fmt.Errorf("field %q not found in %s", name, db)
+	}
+	if f.Collection {
+		return "", "", fmt.Errorf("board axis %q is a collection — use a single-select, workflow state or single relation", f.Name)
+	}
+	tid := findTypeID(schema, f.Type)
+	if tid == "" || primitiveFieldTypes[f.Type] || strings.HasPrefix(f.Type, "fibery/") {
+		return "", "", fmt.Errorf("board axis %q (%s) must be a single-select, workflow state or relation", f.Name, f.Type)
+	}
+	return f.ID, tid, nil
 }

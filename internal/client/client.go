@@ -427,6 +427,9 @@ type ViewRecord struct {
 	ContainerType         string
 	ContainerEntityID     string
 	ContainerEntityTypeID string
+	// Meta is the raw fibery/meta: items[].query (q/from = database type id),
+	// axes (x/y) for boards, filters and units — all keyed by type and field ids.
+	Meta json.RawMessage
 }
 
 // viewRPCResponse decodes a views JSON-RPC response.
@@ -438,13 +441,11 @@ type viewRPCResponse struct {
 }
 
 type viewRaw struct {
-	ID       string `json:"fibery/id"`
-	Name     string `json:"fibery/name"`
-	PublicID string `json:"fibery/public-id"`
-	Type     string `json:"fibery/type"`
-	Meta     struct {
-		DocumentSecret string `json:"documentSecret"`
-	} `json:"fibery/meta"`
+	ID           string          `json:"fibery/id"`
+	Name         string          `json:"fibery/name"`
+	PublicID     string          `json:"fibery/public-id"`
+	Type         string          `json:"fibery/type"`
+	Meta         json.RawMessage `json:"fibery/meta"`
 	ContainerApp struct {
 		ID string `json:"fibery/id"`
 	} `json:"fibery/container-app"`
@@ -456,12 +457,17 @@ type viewRaw struct {
 }
 
 func (r viewRaw) toRecord() ViewRecord {
+	var meta struct {
+		DocumentSecret string `json:"documentSecret"`
+	}
+	_ = json.Unmarshal(r.Meta, &meta)
 	return ViewRecord{
 		ID:                    r.ID,
 		Name:                  r.Name,
 		PublicID:              r.PublicID,
 		Type:                  r.Type,
-		DocumentSecret:        r.Meta.DocumentSecret,
+		DocumentSecret:        meta.DocumentSecret,
+		Meta:                  r.Meta,
 		ContainerAppID:        r.ContainerApp.ID,
 		ContainerType:         r.ContainerType,
 		ContainerEntityID:     r.ContainerEntityID,
@@ -529,6 +535,15 @@ func (c *Client) CreateViews(ctx context.Context, views []map[string]any) error 
 func (c *Client) DeleteViews(ctx context.Context, ids []string) error {
 	if _, err := c.viewRPC(ctx, "delete-views", map[string]any{"ids": ids}); err != nil {
 		return fmt.Errorf("client.DeleteViews: %w", err)
+	}
+	return nil
+}
+
+// UpdateViews calls "update-views": each update is {"id": <uuid>, "values":
+// {<attribute>: <value>}} — e.g. {"fibery/name": "New name"} or "fibery/meta".
+func (c *Client) UpdateViews(ctx context.Context, updates []map[string]any) error {
+	if _, err := c.viewRPC(ctx, "update-views", map[string]any{"updates": updates}); err != nil {
+		return fmt.Errorf("client.UpdateViews: %w", err)
 	}
 	return nil
 }

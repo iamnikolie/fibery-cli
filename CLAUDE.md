@@ -56,7 +56,8 @@ cmd/
   me.go                        current user
   inbox.go                     inbox <db>... (recent activity history)
   wiki.go                      wiki list (space/wiki documents via query-views)
-  view.go                      view create / embed / list / delete (views JSON-RPC)
+  view.go                      view create (list/table/board) / embed / list / delete (views JSON-RPC)
+  view_show.go                 view show / rename
   utils_view.go                pure view helpers: filter → field-id meta, inline-view node insert/remove
   utils_enum.go                shared resolvers: field value → API value, enum/user/doc lookups
   *_test.go                    per-command unit tests (pure logic, no network)
@@ -216,6 +217,13 @@ These are not documented anywhere except in the wild; encode them into helpers r
     It is NOT the `entity` node with `typeId = fibery/view` (markdown `[[#^…]]`) — that is
     a reference to a view entity, not an inline view. A `member` token cannot create `container-type:
     "app"` (left-nav) views; entity-owned ones work. `fibery view` encodes all of this.
+    A **board** adds axes: `meta.x`/`meta.y` = `{type: ":axis-type/objects", query:
+    {q/from: <type id the axis field points at>}}` and `items[0].xExpression` /
+    `yExpression` = `[<field id>]`. A board over several databases has one item per
+    database and `x.type ":axis-type/merged-enums"` with `x.enums[<db type id>]`
+    → that database's state type — so the databases a view reads are always
+    `items[].query.q/from`. Rename is `update-views` `{"updates":[{"id", "values":
+    {"fibery/name": …}}]}` (`client.UpdateViews`).
 
 17. **No known Markdown → ProseMirror endpoint, but any secret is a document.**
     `POST /api/documents/commands?format=md` `create-or-update-documents` creates a

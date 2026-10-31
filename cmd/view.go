@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -32,12 +33,16 @@ var (
 	viewCreateEmbedDB  string
 	viewCreateEmbedFld string
 	viewCreateAfter    string
+	viewCreateColumns  string
+	viewCreateRows     string
 )
 
 var viewCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a list/table view over a database, optionally embedded in an entity's rich text",
-	Long: `Create a list or table view over --db. Filters use the same "field<op>value"
+	Short: "Create a list/table/board view over a database, optionally embedded in an entity's rich text",
+	Long: `Create a list, table or board view over --db. A board groups cards into
+columns by --columns (default: the workflow state) and, optionally, rows by
+--rows; both must be a single-select, workflow state or single relation field. Filters use the same "field<op>value"
 syntax as 'fibery query --filter' (ops: = != ~) and are stored the way the Fibery
 filter editor stores them, so they stay editable in the UI:
   - text/number/bool/date fields: = and != compare the value, ~ is "contains"
@@ -58,6 +63,7 @@ Examples:
   fibery view create --db "Space/Database" --name "Open UI bugs" --filter "Space/Name~[UI]"
   fibery view create --db "Space/Database" --name "Mine" --type table \
     --filter "workflow/state=Open" --filter "Space/Owner=dev@acme.com"
+  fibery view create --db "Space/Database" --name "Board" --type board --rows "Space/Project"
   fibery view create --db "Space/Database" --name "[ii] bugs" --filter "Space/Name~[ii]" \
     --embed 3947 --embed-db "Space/Database" --embed-field "Space/Description" --after-heading Scope`,
 	Args: cobra.NoArgs,
@@ -70,7 +76,10 @@ func runViewCreate(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("--db and --name are required")
 	}
 	if !viewTypes[viewCreateType] {
-		return fmt.Errorf("--type must be list or table, got %q", viewCreateType)
+		return fmt.Errorf("--type must be list, table or board, got %q", viewCreateType)
+	}
+	if viewCreateType != "board" && (viewCreateColumns != "" || viewCreateRows != "") {
+		return fmt.Errorf("--columns/--rows only apply to --type board")
 	}
 	if viewCreateWhere != "" && len(viewCreateFilters) > 0 {
 		return fmt.Errorf("--where and --filter are mutually exclusive")
@@ -129,6 +138,20 @@ func runViewCreate(cmd *cobra.Command, _ []string) error {
 		Units:   defaultViewUnits(schema, viewCreateDB),
 		OrderBy: defaultViewOrder(schema, viewCreateDB),
 		Owner:   owner,
+	}
+	if viewCreateType == "board" {
+		col := viewCreateColumns
+		if col == "" {
+			col = "workflow/state"
+		}
+		if spec.XField, spec.XType, err = boardAxis(schema, viewCreateDB, col); err != nil {
+			return err
+		}
+		if viewCreateRows != "" {
+			if spec.YField, spec.YType, err = boardAxis(schema, viewCreateDB, viewCreateRows); err != nil {
+				return err
+			}
+		}
 	}
 	if err := cli.CreateViews(ctx, []map[string]any{buildViewRecord(spec)}); err != nil {
 		if owner == nil && strings.Contains(err.Error(), "create view permission") {
@@ -375,6 +398,8 @@ var (
 	viewListSpace string
 	viewListType  string
 	viewListOwner string
+	viewListDB    string
+	viewListDead  bool
 )
 
 var viewListCmd = &cobra.Command{
@@ -385,7 +410,9 @@ var viewListCmd = &cobra.Command{
 Examples:
   fibery view list --space Development
   fibery view list --type list
-  fibery view list --owner 3947        # views owned by (embedded in) entity #3947`,
+  fibery view list --owner 3947        # views owned by (embedded in) entity #3947
+  fibery view list --db "Space/Database"   # views reading this database
+  fibery view list --dead              # views whose databases were all deleted`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		appNames, err := loadAppNames(cmd.Context())
@@ -397,14 +424,32 @@ Examples:
 			return err
 		}
 		rows := filterViews(views, appNames, viewListSpace, viewListType, viewListOwner)
+		schema, _ := cache.LoadSchema(account)
+		byID := map[string]client.ViewRecord{}
+		for _, v := range views {
+			byID[v.ID] = v
+		}
+		kept := rows[:0]
+		for _, r := range rows {
+			names, dead := viewDBNames(schema, byID[r["id"]].Meta)
+			r["databases"] = strings.Join(names, ", ")
+			if viewListDead && !dead {
+				continue
+			}
+			if viewListDB != "" && !slices.Contains(names, viewListDB) {
+				continue
+			}
+			kept = append(kept, r)
+		}
+		rows = kept
 		if outputFormat == "json" || jsonOutput {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			return enc.Encode(rows)
 		}
-		fmt.Printf("| View | ID | Type | Space | Owner | UUID |\n|------|----|------|-------|-------|------|\n")
+		fmt.Printf("| View | ID | Type | Space | Owner | Databases | UUID |\n|------|----|------|-------|-------|-----------|------|\n")
 		for _, r := range rows {
-			fmt.Printf("| %s | %s | %s | %s | %s | %s |\n", r["name"], r["publicId"], r["type"], r["space"], r["owner"], r["id"])
+			fmt.Printf("| %s | %s | %s | %s | %s | %s | %s |\n", r["name"], r["publicId"], r["type"], r["space"], r["owner"], r["databases"], r["id"])
 		}
 		return nil
 	},
@@ -439,39 +484,56 @@ func filterViews(views []client.ViewRecord, appNames map[string]string, space, t
 var viewDeleteYes bool
 
 var viewDeleteCmd = &cobra.Command{
-	Use:   "delete <uuid|public-id>",
-	Short: "Delete a view",
+	Use:   "delete <uuid|public-id>...",
+	Short: "Delete one or more views",
 	Long: `Delete a view by UUID or public id. Requires --yes. For a view owned by an entity
 (one embedded with --embed), its inline-view blocks are also removed from that
 entity's rich-text fields.
 
-Example:
-  fibery view delete 2901 --yes`,
-	Args: cobra.ExactArgs(1),
+Examples:
+  fibery view delete 2901 --yes
+  fibery view delete 2901 2902 2903 --yes`,
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		v, err := findView(cmd.Context(), args[0])
-		if err != nil {
-			return err
+		var vs []*client.ViewRecord
+		for _, a := range args {
+			v, err := findView(cmd.Context(), a)
+			if err != nil {
+				return err
+			}
+			vs = append(vs, v)
 		}
 		if !viewDeleteYes {
-			return fmt.Errorf("delete is destructive — add --yes to confirm (%s view %q, #%s)", v.Type, v.Name, v.PublicID)
+			for _, v := range vs {
+				fmt.Printf("- %s view %q (#%s)\n", v.Type, v.Name, v.PublicID)
+			}
+			return fmt.Errorf("delete is destructive — add --yes to delete the %d view(s) above", len(vs))
 		}
-		if err := cli.DeleteViews(cmd.Context(), []string{v.ID}); err != nil {
-			return err
-		}
-		fmt.Printf("Deleted %s view %q (#%s).\n", v.Type, v.Name, v.PublicID)
-		if v.ContainerType != "object" || v.ContainerEntityID == "" {
-			return nil
-		}
-		n, err := removeOwnerEmbeds(cmd.Context(), v)
-		if err != nil {
-			return fmt.Errorf("view deleted, but its block in entity #%s was not removed: %w", v.ContainerEntityID, err)
-		}
-		if n > 0 {
-			fmt.Printf("Removed %d inline-view block(s) from entity #%s.\n", n, v.ContainerEntityID)
+		for _, v := range vs {
+			if err := deleteOneView(cmd, v); err != nil {
+				return err
+			}
 		}
 		return nil
 	},
+}
+
+func deleteOneView(cmd *cobra.Command, v *client.ViewRecord) error {
+	if err := cli.DeleteViews(cmd.Context(), []string{v.ID}); err != nil {
+		return err
+	}
+	fmt.Printf("Deleted %s view %q (#%s).\n", v.Type, v.Name, v.PublicID)
+	if v.ContainerType != "object" || v.ContainerEntityID == "" {
+		return nil
+	}
+	n, err := removeOwnerEmbeds(cmd.Context(), v)
+	if err != nil {
+		return fmt.Errorf("view deleted, but its block in entity #%s was not removed: %w", v.ContainerEntityID, err)
+	}
+	if n > 0 {
+		fmt.Printf("Removed %d inline-view block(s) from entity #%s.\n", n, v.ContainerEntityID)
+	}
+	return nil
 }
 
 // removeOwnerEmbeds removes a view's inline blocks from every rich-text field of
@@ -518,7 +580,9 @@ func init() {
 	f := viewCreateCmd.Flags()
 	f.StringVar(&viewCreateDB, "db", "", "database the view shows (required)")
 	f.StringVar(&viewCreateName, "name", "", "view name (required)")
-	f.StringVar(&viewCreateType, "type", "list", "view type: list | table")
+	f.StringVar(&viewCreateType, "type", "list", "view type: list | table | board")
+	f.StringVar(&viewCreateColumns, "columns", "", "board: field for columns (default workflow/state)")
+	f.StringVar(&viewCreateRows, "rows", "", "board: field for rows/swimlanes (optional)")
 	f.StringArrayVar(&viewCreateFilters, "filter", nil, `filter "field=value" (repeatable; ops: = != ~)`)
 	f.BoolVar(&viewCreateAny, "any", false, "OR the --filter clauses instead of AND")
 	f.StringVar(&viewCreateWhere, "where", "", "raw FQL where-expression as JSON (instead of --filter)")
@@ -537,6 +601,8 @@ func init() {
 	viewListCmd.Flags().StringVar(&viewListSpace, "space", "", "only views in this space")
 	viewListCmd.Flags().StringVar(&viewListType, "type", "", "only views of this type (list, table, board, …)")
 	viewListCmd.Flags().StringVar(&viewListOwner, "owner", "", "only views owned by the entity with this public id")
+	viewListCmd.Flags().StringVar(&viewListDB, "db", "", "only views reading this database")
+	viewListCmd.Flags().BoolVar(&viewListDead, "dead", false, "only views whose databases no longer exist")
 
 	viewDeleteCmd.Flags().BoolVar(&viewDeleteYes, "yes", false, "confirm deletion (required)")
 

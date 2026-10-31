@@ -67,10 +67,12 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
 | `fibery doc append <secret\|id\|url> <md>` | Append Markdown to the end of a document; existing content (inline comments, views, mentions) is kept untouched | `--db`, `--field`, `--secret` |
 | `fibery wiki list` | List space/wiki documents (left-nav pages); `docs list` also works | `--space`, `--limit` |
-| `fibery view create` | Create a list/table view over a database; `--embed` puts it inline in an entity's rich text | `--db`, `--name` (required), `--type list\|table`, `--filter` (repeatable), `--any`, `--where`, `--params`, `--embed`, `--embed-db`, `--embed-field`, `--after-heading` |
+| `fibery view create` | Create a list/table/board view over a database; `--embed` puts it inline in an entity's rich text | `--db`, `--name` (required), `--type list\|table\|board`, `--columns`, `--rows` (board), `--filter` (repeatable), `--any`, `--where`, `--params`, `--embed`, `--embed-db`, `--embed-field`, `--after-heading` |
 | `fibery view embed <view>` | Insert an existing view (uuid or public id) inline into a rich-text field | `--embed` (required), `--embed-db`, `--embed-field`, `--after-heading` |
-| `fibery view list` | List views (not wiki docs) | `--space`, `--type`, `--owner <public-id>` |
-| `fibery view delete <view>` | Delete a view; an entity-owned view's inline blocks are removed too | `--yes` (required) |
+| `fibery view list` | List views (not wiki docs) with the databases they read | `--space`, `--type`, `--owner <public-id>`, `--db`, `--dead` |
+| `fibery view show <view>` | One view by name: place, databases, board columns/rows, filter | `--json` (raw record with meta) |
+| `fibery view rename <view> <name>` | Rename a view | — |
+| `fibery view delete <view>...` | Delete one or more views; an entity-owned view's inline blocks are removed too | `--yes` (required) |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
 | `fibery files download <entity-id>` | Download attachments to disk | `--db` (required), `--field`, `--out`, `--secret`, `--name` |
 | `fibery files upload <entity-id> <file>...` | Upload local files and attach to a file field | `--db` (required), `--field`, `--no-attach` |
@@ -197,6 +199,14 @@ fibery view create --db "Development/Dev Task" --name "Mine, open" \
 fibery view list --owner 3947                 # views owned by entity #3947
 fibery view embed 2930 --embed 3947 --embed-db "Development/bug" --embed-field "Development/steps-to-reproduce"
 fibery view delete 2930 --yes                 # also removes its inline block from #3947
+
+# Boards: columns by --columns (default workflow state), optional rows by --rows;
+# each axis is a single-select, workflow state or single relation field
+fibery view create --db "Space/Work" --name "Board" --type board --rows Project
+fibery view show 306                          # names instead of ids; --json for the raw meta
+fibery view rename 306 "All work"
+fibery view list --dead                       # views whose databases were all deleted
+fibery view delete 81 88 95 --yes             # several at once
 ```
 
 - Filters are stored by field id, the way the UI filter editor writes them, so they stay
