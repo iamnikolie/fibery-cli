@@ -94,12 +94,18 @@ Change the schema:
 fibery schema db delete "Space/Database" --dry-run   # plan: entities, helper types, fields that go
 fibery schema db delete "Space/Database" --yes       # delete database + its enums/workflow atomically
 fibery schema db delete "Space/Database" --delete-entities --yes   # also when it has entities
+fibery schema db rename "Space/Task" Tasks --yes
+fibery schema field add "Space/Database" Project --type single-select --option Alpha --option Beta --default Alpha --yes
+fibery schema field add "Space/Database" Epic --type relation --to "Space/Epic" --yes
+fibery schema field rename "Space/Database" Epic Parent --yes
+fibery schema field delete "Space/Database" Parent --delete-values --yes
 ```
 
 A database owns one helper type per single-select field and one for its
 workflow; Fibery does not delete them with the database, so `schema db delete`
 removes all of them in one batch. A non-empty database is refused unless
-`--delete-entities` is given; the cache is re-synced afterwards.
+`--delete-entities` is given; the cache is re-synced afterwards. Every schema
+command prints its plan, honours `--dry-run` and changes nothing without `--yes`.
 
 ## Commands
 

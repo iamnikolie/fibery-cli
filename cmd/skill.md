@@ -83,6 +83,10 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery schema enums <db>` | Enum field values with fibery/id | — |
 | `fibery schema refs <db>` | Relations out of / into a database + the helper types it owns (enums, workflow) | `--json` |
 | `fibery schema db delete <db>` | Delete a database with its enums and workflow in one atomic batch; prints the plan first | `--dry-run`, `--yes` (required), `--delete-entities` |
+| `fibery schema db rename <db> <new>` | Rename a database within its space (entities and ids kept) | `--dry-run`, `--yes` (required) |
+| `fibery schema field add <db> <field>` | Add a field: text/url/email/phone/int/decimal/bool/date/date-time/rich-text/single-select/relation | `--type` (required), `--option` (repeatable), `--default`, `--required`, `--to`, `--back-name`, `--many`, `--dry-run`, `--yes` (required) |
+| `fibery schema field delete <db> <field>` | Delete a field; both sides of a relation, a single-select's option type | `--delete-values`, `--dry-run`, `--yes` (required) |
+| `fibery schema field rename <db> <field> <new>` | Rename a field (values kept) | `--dry-run`, `--yes` (required) |
 | `fibery skill` | Print this skill reference | — |
 | `fibery version` | Print version, commit and build date | also `--version` |
 
@@ -660,7 +664,29 @@ Schema mutations go through `fibery schema db …` — never hand-build a
 fibery schema db delete "Space/Database" --dry-run          # plan only
 fibery schema db delete "Space/Database" --yes              # empty database
 fibery schema db delete "Space/Database" --delete-entities --yes   # with its entities
+fibery schema db rename "Space/Task" Tasks --yes               # stays in its space
+
+# Fields — a bare name gets the database's space ("Project" → "Space/Project")
+fibery schema field add "Space/Database" Project --type single-select \
+  --option Alpha --option Beta --default Alpha --dry-run
+fibery schema field add "Space/Database" Epic --type relation --to "Space/Epic" --yes
+fibery schema field add "Space/Database" Link --type url --yes
+fibery schema field rename "Space/Database" Link Website --yes
+fibery schema field delete "Space/Database" Website --delete-values --yes
 ```
+
+`field add` sends one `fibery.command/batch`, so a single-select arrives with
+its options (and default) or not at all. A relation creates both sides; the back
+field on `--to` is a collection named after the holder database unless
+`--back-name` is given; `--many` makes this side a collection too.
+`field delete` removes both sides of a relation in one batch and a
+single-select's option type with it; built-in/mixin fields (`workflow/state`,
+`comments/*`, `fibery/*`) are refused. A field holding values is refused by
+Fibery unless `--delete-values`. Every command re-syncs the schema cache.
+
+There is no `db create`: a usable database needs workflow, comments, files and
+rich-text mixins whose install commands are not in the public API docs — create
+it in the UI, or reuse an existing database and add fields to it.
 
 Why a command and not `exec`: a database owns helper types — one per
 single-select field (`Space/Priority_Space/Database`) and its workflow
