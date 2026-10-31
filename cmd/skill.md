@@ -39,7 +39,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 
 | Command | Description | Key flags |
 |---------|-------------|-----------|
-| `fibery search <text>` | Find entities by name (sugar for `list <db> --filter "Name~text"`; without `--db` it lists all databases) | `--db`, `--limit` (default 20) |
+| `fibery search <text>` | Find entities by name (sugar for `list <db> --filter "Name~text"`; without `--db` it lists all databases) | `--db`, `--limit` (default 20), `--filter` (repeatable, ANDed) |
 | `fibery get <id-or-url>` | Fetch one entity by public ID, prefixed ID, UUID, **or Fibery URL** — all scalar/relation fields + URL; doc bodies hidden by default | `--db` (required unless a URL is given), `--id-only`, `--fields`, `--docs`, `--no-docs` |
 | `fibery resolve <url>` | **Alias of `get`** (`get` accepts URLs directly). A URL may target an entity, a space (→ lists its databases), or a space/wiki document | same as `get` |
 | `fibery context init <db>` | Print a heuristic draft context profile (keep/docs/edges) for a database; `--save` persists it | `--save` |

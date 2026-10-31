@@ -22,8 +22,9 @@ func isTTY() bool {
 }
 
 var (
-	searchDB    string
-	searchLimit int
+	searchDB      string
+	searchLimit   int
+	searchFilters []string
 )
 
 var searchCmd = &cobra.Command{
@@ -35,7 +36,8 @@ If --db is omitted, shows an interactive database picker.
 Examples:
   fibery search "webhook"
   fibery search "webhook" --db "Support platform/Support ticket"
-  fibery search "auth" --db "Development/bug" --limit 10`,
+  fibery search "auth" --db "Development/bug" --limit 10
+  fibery search "Task-3" --db "Development/Work" --filter "Development/Project=Alpha"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		db := searchDB
@@ -68,17 +70,29 @@ Examples:
 			sel["State"] = []any{"workflow/state", "enum/name"}
 		}
 
+		var where any = []any{"q/contains-ignoring-case?", []any{titleField}, "$q"}
+		params := map[string]any{"$q": args[0]}
+		if len(searchFilters) > 0 {
+			clause, ps, err := buildFilterClause(schema, db, searchFilters)
+			if err != nil {
+				return err
+			}
+			where = []any{"q/and", where, clause}
+			for k, v := range ps {
+				params[k] = v
+			}
+		}
 		result, err := cli.One(cmd.Context(), client.Command{
 			Command: "fibery.entity/query",
 			Args: map[string]any{
 				"query": map[string]any{
 					"q/from":     db,
 					"q/select":   sel,
-					"q/where":    []any{"q/contains-ignoring-case?", []any{titleField}, "$q"},
+					"q/where":    where,
 					"q/order-by": []any{[]any{[]any{"fibery/creation-date"}, "q/desc"}},
 					"q/limit":    searchLimit,
 				},
-				"params": map[string]any{"$q": args[0]},
+				"params": params,
 			},
 		})
 		if err != nil {
@@ -156,5 +170,6 @@ func listDatabases(schema map[string]any) []string {
 func init() {
 	searchCmd.Flags().StringVar(&searchDB, "db", "", "database to search in (interactive picker if omitted)")
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "max results")
+	searchCmd.Flags().StringArrayVar(&searchFilters, "filter", nil, "also match field=value (repeatable, as in list)")
 	rootCmd.AddCommand(searchCmd)
 }
