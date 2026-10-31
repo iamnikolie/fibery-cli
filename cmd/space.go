@@ -325,7 +325,7 @@ var (
 var spaceDeleteCmd = &cobra.Command{
 	Use:   "delete <space>",
 	Short: "Delete a space that has no databases",
-	Long: `Delete a space (fibery.app/uninstall). Refused while the space still has
+	Long: `Delete a space (fibery.app/uninstall, then fibery.app/delete). Refused while the space still has
 databases — delete or archive those first ('fibery export', 'fibery schema db
 delete'). The plan lists the views, wiki documents and folders that go with it;
 nothing changes without --yes. Archive wiki documents first with
@@ -361,8 +361,16 @@ Example:
 		if !spaceDeleteYes {
 			return fmt.Errorf("deleting a space is destructive — re-run with --yes to apply the plan above")
 		}
+		// An installed space must be uninstalled before fibery.app/delete accepts
+		// it (delete-installed-app-failed); uninstall alone leaves it listed.
 		if _, err := cli.One(cmd.Context(), client.Command{
 			Command: "fibery.app/uninstall",
+			Args:    map[string]any{"fibery/id": sp.ID},
+		}); err != nil && !strings.Contains(err.Error(), "app-installed-not-found") {
+			return fmt.Errorf("uninstall space %s: %w", sp.Name, err)
+		}
+		if _, err := cli.One(cmd.Context(), client.Command{
+			Command: "fibery.app/delete",
 			Args:    map[string]any{"fibery/id": sp.ID},
 		}); err != nil {
 			return fmt.Errorf("delete space %s: %w", sp.Name, err)
@@ -370,7 +378,7 @@ Example:
 		apps, err := loadUserSpaces(cmd)
 		if err == nil {
 			if _, still := apps[sp.ID]; still {
-				return fmt.Errorf("space %q is still listed after fibery.app/uninstall", sp.Name)
+				return fmt.Errorf("space %q is still listed after fibery.app/delete", sp.Name)
 			}
 		}
 		fmt.Printf("Deleted space %s.\n", sp.Name)

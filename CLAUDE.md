@@ -58,7 +58,7 @@ cmd/
   wiki.go                      wiki list (space/wiki documents via query-views)
   view.go                      view create (list/table/board) / embed / list / delete (views JSON-RPC)
   view_show.go                 view show / rename
-  space.go                     space list/delete (fibery.app/uninstall), folder list/delete (query-/delete-folders)
+  space.go                     space list/delete (fibery.app/delete), folder list/delete (query-/delete-folders)
   wiki_move.go                 folder create, view move, wiki create (from Markdown or an entity's rich text)
   utils_view.go                pure view helpers: filter → field-id meta, inline-view node insert/remove
   utils_enum.go                shared resolvers: field value → API value, enum/user/doc lookups
@@ -231,8 +231,10 @@ These are not documented anywhere except in the wild; encode them into helpers r
     `query-folders` / `delete-folders {"ids": [...]}`; a folder's parent is
     `fibery/Parent Folder`, a view's folder is `fibery/Folder`. A space is a
     `fibery/app`; Fibery's own (Workflow, Comments, User, …) carry
-    `fibery/preinstalled? true`. `fibery.app/uninstall {"fibery/id": <app id>}`
-    removes a space (`fibery.app/delete` also exists). `space delete` refuses a
+    `fibery/preinstalled? true`. A space is removed in two steps:
+    `fibery.app/uninstall {"fibery/id": <app id>}` (answers OK, space still
+    listed), then `fibery.app/delete {"fibery/id": …}` — delete alone fails with
+    `delete-installed-app-failed` for an installed space. `space delete` refuses a
     space that still has databases.
     `create-folders {"values": [{fibery/id, fibery/name, fibery/container-app,
     fibery/Parent Folder?}]}`. Moving a view or wiki document is `update-views`

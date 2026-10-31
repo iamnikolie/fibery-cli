@@ -79,7 +79,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery view move <view>...` | Move views or wiki documents to a space and folder; nested pages are taken out of their parent | `--space` (required), `--folder <path>` |
 | `fibery wiki create` | New wiki document from a Markdown file, or a copy of an entity's rich text (JSON, formatting kept) | `--space`, `--name` (required), `--folder`, `--file` \| `--from <id> --from-db <db> [--from-field]` |
 | `fibery space list` | The workspace's own spaces with databases, views, wiki documents, folders | `--json` |
-| `fibery space delete <space>` | Delete a space with no databases (fibery.app/uninstall); built-in spaces refused | `--dry-run`, `--yes` (required) |
+| `fibery space delete <space>` | Delete a space with no databases (fibery.app/uninstall + delete); built-in spaces refused | `--dry-run`, `--yes` (required) |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
 | `fibery files download <entity-id>` | Download attachments to disk | `--db` (required), `--field`, `--out`, `--secret`, `--name` |
 | `fibery files upload <entity-id> <file>...` | Upload local files and attach to a file field | `--db` (required), `--field`, `--no-attach` |
