@@ -155,3 +155,16 @@ func TestTargetStateAndPairs(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "Old/Tasks #42", legacyIDValue("Old/Tasks", "42"))
 }
+
+func TestBuildMovePlanTextFromEnumAndUser(t *testing.T) {
+	p, err := buildMovePlan(moveFixture(), "Old/Tasks", "New/Work", map[string]string{
+		"Old/Priority": "New/Legacy module", "Old/Assignee": "New/Legacy module"})
+	require.NoError(t, err)
+	titles := map[string]string{}
+	for _, f := range p.Fields {
+		if f.Kind == mvRelText {
+			titles[f.Src] = f.TitleOf
+		}
+	}
+	assert.Equal(t, map[string]string{"Old/Priority": "enum/name", "Old/Assignee": "user/name"}, titles)
+}

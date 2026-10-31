@@ -117,8 +117,15 @@ func buildMovePlan(schema map[string]any, src, dst string, textMap map[string]st
 			if dfm == nil || asStr(dfm["fibery/type"]) != "fibery/text" {
 				return p, fmt.Errorf("--text %s=%s: %s has no text field %q", name, to, dst, to)
 			}
+			title := findTitleField(schema, typ)
+			switch {
+			case isEnumLikeType(typ):
+				title = "enum/name"
+			case typ == "fibery/user":
+				title = "user/name"
+			}
 			p.Fields = append(p.Fields, moveField{Src: name, Dst: to, Kind: mvRelText, SrcType: typ, DstType: "fibery/text",
-				SrcMany: srcMany, TitleOf: findTitleField(schema, typ)})
+				SrcMany: srcMany, TitleOf: title})
 			continue
 		}
 		if !strings.Contains(name, "/") || strings.HasPrefix(name, "fibery/") {
@@ -318,7 +325,9 @@ date and replies. Mentions between moved entities are pointed at the copies.
 The source is not changed. --legacy-id names a text field on the target that
 gets "Source/DB #<public id>"; entities already copied (that value exists) are
 skipped, so a run can be repeated after a failure. --set gives a value to every
-copy; --text sends a relation's titles to a text field. Fields with no
+copy and wins over a source field of the same name; --text sends a
+relation's (or single-select's) values to a text field as "Field: value",
+several into one field joined with " · ". Fields with no
 counterpart are listed as dropped in the plan.
 
 Prints the plan; nothing changes without --yes. --out writes the old → new id
@@ -386,6 +395,18 @@ func runMove(cmd *cobra.Command, args []string) error {
 		consts[field] = val
 		constNames = append(constNames, field+"="+strings.TrimSpace(v))
 	}
+
+	// A --set field wins over a source field mapped onto it.
+	kept := p.Fields[:0]
+	for _, f := range p.Fields {
+		if _, ok := consts[f.Dst]; ok {
+			p.Dropped = append(p.Dropped, f.Src+" (overridden by --set "+f.Dst+")")
+			continue
+		}
+		kept = append(kept, f)
+	}
+	p.Fields = kept
+	sort.Strings(p.Dropped)
 
 	// Source rows.
 	query := map[string]any{"q/from": src, "q/select": moveSelect(p), "q/order-by": []any{[]any{[]any{"fibery/rank"}, "q/asc"}}}
@@ -644,6 +665,7 @@ func (m *mover) copyOne(r map[string]any) (string, error) {
 		case mvUser:
 			e[f.Dst] = ref2(asStr(v))
 		case mvRelText:
+			var text string
 			if f.SrcMany {
 				var ts []string
 				for _, x := range mustSlice(v) {
@@ -651,11 +673,17 @@ func (m *mover) copyOne(r map[string]any) (string, error) {
 						ts = append(ts, asStr(xm["t"]))
 					}
 				}
-				if len(ts) > 0 {
-					e[f.Dst] = strings.Join(ts, ", ")
+				text = strings.Join(ts, ", ")
+			} else {
+				text = asStr(v)
+			}
+			if text != "" {
+				// Several --text into one field: "Module: CFO · Version: v0.13".
+				part := localName(f.Src) + ": " + text
+				if prev, ok := e[f.Dst].(string); ok && prev != "" {
+					part = prev + " · " + part
 				}
-			} else if s := asStr(v); s != "" {
-				e[f.Dst] = s
+				e[f.Dst] = part
 			}
 		default:
 			after = append(after, later{f, v})
