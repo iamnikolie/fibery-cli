@@ -46,7 +46,9 @@ func exportSelect(schema map[string]any, db string) (sel map[string]any, docKeys
 			}
 			name, typ := asStr(fm["fibery/name"]), asStr(fm["fibery/type"])
 			meta, _ := fm["fibery/meta"].(map[string]any)
-			if meta["fibery/collection?"] != true || isFile[name] || skipFieldTypes[typ] {
+			// comments/comment is in skipFieldTypes (noise for get), so test the
+			// collection before the skip list.
+			if meta["fibery/collection?"] != true || isFile[name] || (skipFieldTypes[typ] && name != "comments/comments") {
 				continue
 			}
 			switch {

@@ -29,3 +29,23 @@ func TestFormatValue(t *testing.T) {
 	assert.Equal(t, "A, B (#2)", formatValue([]any{map[string]any{"Name": "A"}, map[string]any{"Name": "B", "Public ID": "2"}}))
 	assert.Equal(t, "Done", formatValue(map[string]any{"enum/name": "Done"}))
 }
+
+func TestExportSelect_IncludesCommentsAndCollections(t *testing.T) {
+	coll := func(name, typ string) map[string]any {
+		return map[string]any{"fibery/name": name, "fibery/type": typ, "fibery/meta": map[string]any{"fibery/collection?": true}}
+	}
+	schema := map[string]any{"fibery/types": []any{
+		sdbType("Space/Tasks",
+			map[string]any{"fibery/name": "Space/Name", "fibery/type": "fibery/text", "fibery/meta": map[string]any{"ui/title?": true}},
+			coll("comments/comments", "comments/comment"),
+			coll("Space/Files", "fibery/file"),
+			coll("Space/Blocks", "Space/Tasks"),
+		),
+	}}
+	sel, _, files, hasComments := exportSelect(schema, "Space/Tasks")
+	assert.True(t, hasComments)
+	assert.Contains(t, sel, "_comments")
+	assert.Equal(t, []string{"Space/Files"}, files)
+	assert.Contains(t, sel, "_files_Space/Files")
+	assert.Contains(t, sel, "Blocks")
+}
