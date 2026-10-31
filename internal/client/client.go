@@ -427,6 +427,7 @@ type ViewRecord struct {
 	ContainerType         string
 	ContainerEntityID     string
 	ContainerEntityTypeID string
+	FolderID              string
 	// Meta is the raw fibery/meta: items[].query (q/from = database type id),
 	// axes (x/y) for boards, filters and units — all keyed by type and field ids.
 	Meta json.RawMessage
@@ -441,11 +442,14 @@ type viewRPCResponse struct {
 }
 
 type viewRaw struct {
-	ID           string          `json:"fibery/id"`
-	Name         string          `json:"fibery/name"`
-	PublicID     string          `json:"fibery/public-id"`
-	Type         string          `json:"fibery/type"`
-	Meta         json.RawMessage `json:"fibery/meta"`
+	ID       string          `json:"fibery/id"`
+	Name     string          `json:"fibery/name"`
+	PublicID string          `json:"fibery/public-id"`
+	Type     string          `json:"fibery/type"`
+	Meta     json.RawMessage `json:"fibery/meta"`
+	Folder   *struct {
+		ID string `json:"fibery/id"`
+	} `json:"fibery/Folder"`
 	ContainerApp struct {
 		ID string `json:"fibery/id"`
 	} `json:"fibery/container-app"`
@@ -461,7 +465,12 @@ func (r viewRaw) toRecord() ViewRecord {
 		DocumentSecret string `json:"documentSecret"`
 	}
 	_ = json.Unmarshal(r.Meta, &meta)
+	folder := ""
+	if r.Folder != nil {
+		folder = r.Folder.ID
+	}
 	return ViewRecord{
+		FolderID:              folder,
 		ID:                    r.ID,
 		Name:                  r.Name,
 		PublicID:              r.PublicID,
@@ -535,6 +544,55 @@ func (c *Client) CreateViews(ctx context.Context, views []map[string]any) error 
 func (c *Client) DeleteViews(ctx context.Context, ids []string) error {
 	if _, err := c.viewRPC(ctx, "delete-views", map[string]any{"ids": ids}); err != nil {
 		return fmt.Errorf("client.DeleteViews: %w", err)
+	}
+	return nil
+}
+
+// FolderRecord is a left-nav folder (undocumented views RPC "query-folders").
+type FolderRecord struct {
+	ID             string
+	Name           string
+	PublicID       string
+	ContainerAppID string
+	ParentID       string
+}
+
+type folderRaw struct {
+	ID           string `json:"fibery/id"`
+	Name         string `json:"fibery/name"`
+	PublicID     string `json:"fibery/public-id"`
+	ContainerApp struct {
+		ID string `json:"fibery/id"`
+	} `json:"fibery/container-app"`
+	Parent *struct {
+		ID string `json:"fibery/id"`
+	} `json:"fibery/Parent Folder"`
+}
+
+// QueryFolders lists every left-nav folder.
+func (c *Client) QueryFolders(ctx context.Context) ([]FolderRecord, error) {
+	result, err := c.viewRPC(ctx, "query-folders", map[string]any{})
+	if err != nil {
+		return nil, fmt.Errorf("client.QueryFolders: %w", err)
+	}
+	var raws []folderRaw
+	if err := json.Unmarshal(result, &raws); err != nil {
+		return nil, fmt.Errorf("client.QueryFolders: decode: %w", err)
+	}
+	out := make([]FolderRecord, len(raws))
+	for i, r := range raws {
+		out[i] = FolderRecord{ID: r.ID, Name: r.Name, PublicID: r.PublicID, ContainerAppID: r.ContainerApp.ID}
+		if r.Parent != nil {
+			out[i].ParentID = r.Parent.ID
+		}
+	}
+	return out, nil
+}
+
+// DeleteFolders deletes folders by id ("delete-folders").
+func (c *Client) DeleteFolders(ctx context.Context, ids []string) error {
+	if _, err := c.viewRPC(ctx, "delete-folders", map[string]any{"ids": ids}); err != nil {
+		return fmt.Errorf("client.DeleteFolders: %w", err)
 	}
 	return nil
 }

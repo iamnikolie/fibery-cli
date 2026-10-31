@@ -373,6 +373,15 @@ document bodies, comments with author and date, attachments — plus `manifest.j
 with counts and errors. Pasted images are downloaded and relinked, so the archive
 stands on its own after the source is deleted.
 
+### Spaces and folders
+
+```bash
+fibery space list                          # own spaces: databases, views, wiki docs, folders
+fibery space delete "Old Space" --dry-run  # refused while it has databases
+fibery folder list --space "Old Space" --empty
+fibery folder delete 9 4 5 7 --yes         # empty folders; nested ones named together
+```
+
 ### Files
 
 ```bash
