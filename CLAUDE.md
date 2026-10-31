@@ -35,6 +35,7 @@ cmd/
   version.go                   --version / `fibery version`; ldflags-injected build metadata
   config.go                    fibery config init
   schema.go                    schema / schema sync / schema show / schema enums
+  schema_db.go                 schema refs, schema db delete (helper-type discovery, atomic delete batch)
   search.go                    fibery search
   list.go                      fibery list
   query.go                     fibery query (raw FQL)
@@ -222,6 +223,17 @@ These are not documented anywhere except in the wild; encode them into helpers r
     `client.MarkdownToDocJSON` does this; `doc append` uses it so the existing body
     never goes through Markdown (a Markdown read-modify-write drops inline comments
     and `fiberyView` nodes).
+
+18. **A database owns helper types that outlive it.** Every single-select field
+    has its own enum type `Space/Field_Space/Database`, and the workflow lives in
+    `workflow/state_Space/Database`. `schema.type/delete` on the database alone
+    fails with `schema-type-components-orphans`; the helper types must be deleted
+    in the **same** `fibery.schema/batch`, each with `delete-entities?: true`
+    (their options are entities). Deleting the options one by one does not work:
+    a field's default option is refused (`entity-delete-default-value`), and
+    `workflow/state` is a mixin field that `schema.field/delete` rejects.
+    `dbComponents` finds the helper types by the `_<db>` suffix; `dbDeleteBatch`
+    builds the batch.
 
 ---
 

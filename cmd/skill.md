@@ -81,6 +81,8 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery schema sync` | Refresh schema cache | — |
 | `fibery schema show <db>` (alias `fields`) | Field table (name / type / kind / required) | — |
 | `fibery schema enums <db>` | Enum field values with fibery/id | — |
+| `fibery schema refs <db>` | Relations out of / into a database + the helper types it owns (enums, workflow) | `--json` |
+| `fibery schema db delete <db>` | Delete a database with its enums and workflow in one atomic batch; prints the plan first | `--dry-run`, `--yes` (required), `--delete-entities` |
 | `fibery skill` | Print this skill reference | — |
 | `fibery version` | Print version, commit and build date | also `--version` |
 
@@ -432,6 +434,7 @@ fibery inbox "Development/Dev Task" "Development/bug" --hours 72
 ```bash
 fibery delete 42 --db "Development/Dev Task" --yes
 fibery exec '{"command":"fibery.entity/delete","args":{...}}' --yes
+fibery schema db delete "Space/Database" --yes
 ```
 
 Without `--yes` the command refuses with a clear error — no usage spam.
@@ -644,7 +647,29 @@ fibery files embed  "$ID" --db "Development/Dev Task" \
 ```bash
 fibery schema show "Development/Dev Task"      # field names, types, kinds, required flag
 fibery schema enums "Development/Dev Task"     # enum values with fibery/id
+fibery schema refs "Development/Dev Task"      # relations out/in + helper types (enums, workflow)
 ```
+
+## Changing the schema
+
+Schema mutations go through `fibery schema db …` — never hand-build a
+`fibery.schema/batch` for `exec` when a command exists. Each one prints its plan
+(entity counts, helper types, the relation fields that disappear) before acting.
+
+```bash
+fibery schema db delete "Space/Database" --dry-run          # plan only
+fibery schema db delete "Space/Database" --yes              # empty database
+fibery schema db delete "Space/Database" --delete-entities --yes   # with its entities
+```
+
+Why a command and not `exec`: a database owns helper types — one per
+single-select field (`Space/Priority_Space/Database`) and its workflow
+(`workflow/state_Space/Database`). Fibery keeps them when the database goes, so
+deleting only the database fails with `schema-type-components-orphans`; deleting
+them needs `delete-entities?` because their options are entities, and a field's
+default option blocks deleting that option on its own. `schema db delete` puts
+the database and its helper types into one atomic batch, refuses a non-empty
+database without `--delete-entities`, and re-syncs the cache afterwards.
 
 **Output formats:**
 ```bash

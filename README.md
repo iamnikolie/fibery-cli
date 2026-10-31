@@ -85,7 +85,21 @@ Inspect the schema:
 fibery schema show "Development/Dev Task"   # field table (name / type / kind / required)
 fibery schema fields "Development/Dev Task" # alias of "schema show"
 fibery schema enums "Development/Dev Task"  # enum values with fibery/id
+fibery schema refs "Development/Dev Task"   # relations out/in + helper types (enums, workflow)
 ```
+
+Change the schema:
+
+```bash
+fibery schema db delete "Space/Database" --dry-run   # plan: entities, helper types, fields that go
+fibery schema db delete "Space/Database" --yes       # delete database + its enums/workflow atomically
+fibery schema db delete "Space/Database" --delete-entities --yes   # also when it has entities
+```
+
+A database owns one helper type per single-select field and one for its
+workflow; Fibery does not delete them with the database, so `schema db delete`
+removes all of them in one batch. A non-empty database is refused unless
+`--delete-entities` is given; the cache is re-synced afterwards.
 
 ## Commands
 
