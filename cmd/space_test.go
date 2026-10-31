@@ -42,3 +42,23 @@ func TestSummarizeSpaces(t *testing.T) {
 	assert.Equal(t, spaceSummary{Name: "Dev", ID: "s1", Databases: []string{"Dev/Work"}, Views: 1, Folders: 1}, got[0])
 	assert.Equal(t, 1, got[1].Documents)
 }
+
+func TestSpaceLeftovers(t *testing.T) {
+	views := []client.ViewRecord{
+		{ID: "v1", ContainerType: "app", ContainerAppID: "s1", FolderID: "f2"},
+		{ID: "d1", Type: "document", ContainerType: "app", ContainerAppID: "s1"},
+		{ID: "v2", ContainerType: "object", ContainerAppID: "s1"}, // entity-owned: not a left-nav view
+		{ID: "v3", ContainerType: "app", ContainerAppID: "s2"},
+	}
+	folders := []client.FolderRecord{
+		{ID: "f1", ContainerAppID: "s1"},
+		{ID: "f2", ContainerAppID: "s1", ParentID: "f1"},
+		{ID: "f3", ContainerAppID: "s2"},
+	}
+	ids, order, err := spaceLeftovers("s1", views, folders)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"v1", "d1"}, ids)
+	require.Len(t, order, 2)
+	assert.Equal(t, "f2", order[0].ID, "children first")
+	assert.Equal(t, "f1", order[1].ID)
+}

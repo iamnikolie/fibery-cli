@@ -328,7 +328,8 @@ var spaceDeleteCmd = &cobra.Command{
 	Long: `Delete a space (fibery.app/uninstall, then fibery.app/delete). Refused while the space still has
 databases — delete or archive those first ('fibery export', 'fibery schema db
 delete'). The plan lists the views, wiki documents and folders that go with it;
-nothing changes without --yes. Archive wiki documents first with
+they are deleted after the space (Fibery itself would leave them orphaned).
+Nothing changes without --yes. Archive wiki documents first with
 'fibery export --space <space>'.
 
 Example:
@@ -381,10 +382,76 @@ Example:
 				return fmt.Errorf("space %q is still listed after fibery.app/delete", sp.Name)
 			}
 		}
-		fmt.Printf("Deleted space %s.\n", sp.Name)
+		// fibery.app/delete leaves the space's views, documents and folders behind,
+		// orphaned under a space that no longer exists.
+		nv, nf, err := deleteSpaceLeftovers(cmd, sp.ID)
+		if err != nil {
+			return fmt.Errorf("space %s deleted, but its views/folders were not: %w", sp.Name, err)
+		}
+		fmt.Printf("Deleted space %s (%d views and documents, %d folders).\n", sp.Name, nv, nf)
 		resync(cmd)
 		return nil
 	},
+}
+
+// spaceLeftovers returns the left-nav views (documents included) and folders of
+// a space, folders ordered children first.
+func spaceLeftovers(spaceID string, views []client.ViewRecord, folders []client.FolderRecord) ([]string, []client.FolderRecord, error) {
+	var ids []string
+	for _, v := range views {
+		if v.ContainerType == "app" && v.ContainerAppID == spaceID {
+			ids = append(ids, v.ID)
+		}
+	}
+	var del []client.FolderRecord
+	for _, f := range folders {
+		if f.ContainerAppID == spaceID {
+			del = append(del, f)
+		}
+	}
+	gone := map[string]bool{}
+	for _, id := range ids {
+		gone[id] = true
+	}
+	var rest []client.ViewRecord
+	for _, v := range views {
+		if !gone[v.ID] {
+			rest = append(rest, v)
+		}
+	}
+	order, err := folderDeleteOrder(del, folders, rest)
+	return ids, order, err
+}
+
+func deleteSpaceLeftovers(cmd *cobra.Command, spaceID string) (int, int, error) {
+	ctx := cmd.Context()
+	views, err := cli.QueryViews(ctx, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	folders, err := cli.QueryFolders(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	ids, order, err := spaceLeftovers(spaceID, views, folders)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(ids) > 0 {
+		if err := cli.DeleteViews(ctx, ids); err != nil {
+			return 0, 0, err
+		}
+	}
+	if len(order) > 0 {
+		fids := make([]string, len(order))
+		for i, f := range order {
+			fids[i] = f.ID
+		}
+		if err := cli.DeleteFolders(ctx, fids); err != nil {
+			return len(ids), 0, err
+		}
+	}
+	return len(ids), len(order), nil
 }
 
 func init() {
