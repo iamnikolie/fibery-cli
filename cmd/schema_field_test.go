@@ -161,3 +161,14 @@ func TestFieldAddUser(t *testing.T) {
 	assert.Equal(t, "fibery/user", back["fibery/holder-type"])
 	assert.Equal(t, "user/Work (Space - Assignee)", back["fibery/name"])
 }
+
+func TestFieldAddBoolDefaultsFalse(t *testing.T) {
+	c, err := fieldAddCommands(fieldSpec{DB: "Space/Work", Name: "Space/Archive", Kind: "bool"}, func() string { return "x" })
+	require.NoError(t, err)
+	cmds := c.Args.(map[string]any)["commands"].([]any)
+	require.Len(t, cmds, 2)
+	meta := cmds[1].(map[string]any)["args"].(map[string]any)["commands"].([]any)
+	assert.Equal(t, "fibery/default-value", meta[0].(map[string]any)["args"].(map[string]any)["key"])
+	assert.Equal(t, false, meta[0].(map[string]any)["args"].(map[string]any)["value"])
+	assert.Equal(t, true, meta[1].(map[string]any)["args"].(map[string]any)["value"])
+}

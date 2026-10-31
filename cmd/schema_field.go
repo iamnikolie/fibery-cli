@@ -71,6 +71,14 @@ func fieldAddCommands(s fieldSpec, newID func() string) (client.Command, error) 
 			meta["ui/type"] = s.Kind
 		}
 		schemaCmds = append(schemaCmds, fieldCreate(s.DB, s.Name, primitiveKinds[s.Kind], meta))
+		if s.Kind == "bool" {
+			// As the UI does: a checkbox is false, never empty, so filters on
+			// "= false" match entities nobody ticked.
+			after = append(after, schemaBatch([]any{
+				setMeta(s.DB, s.Name, "fibery/default-value", false),
+				setMeta(s.DB, s.Name, "fibery/required?", true),
+			}))
+		}
 	case s.Kind == "rich-text":
 		schemaCmds = append(schemaCmds, fieldCreate(s.DB, s.Name, "Collaboration~Documents/Document",
 			map[string]any{"fibery/entity-component?": true}))
