@@ -534,6 +534,16 @@ func runMove(cmd *cobra.Command, args []string) error {
 	var mapOut []map[string]string
 	for i, r := range todo {
 		nid, err := m.copyOne(r)
+		if err != nil && nid != "" {
+			// A half-made copy would be skipped by the next run (its legacy id
+			// exists), losing what was not copied yet — remove it instead.
+			if _, derr := cli.One(ctx, client.Command{Command: "fibery.entity/delete", Args: map[string]any{
+				"type": dst, "entity": map[string]any{"fibery/id": nid},
+			}}); derr != nil {
+				err = fmt.Errorf("%w; the partial copy %s could not be removed (%v) — delete it before re-running", err, nid, derr)
+			}
+			delete(m.ids, asStr(r["id"]))
+		}
 		if err != nil {
 			return fmt.Errorf("#%s %q (%d of %d): %w — fix and re-run; copied entities are skipped", asStr(r["pid"]), asStr(r["title"]), i+1, len(todo), err)
 		}
