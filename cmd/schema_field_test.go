@@ -146,3 +146,18 @@ func TestFieldDeletePlan_Refusals(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, p.Batch, 1)
 }
+
+func TestFieldAddUser(t *testing.T) {
+	n := 0
+	c, err := fieldAddCommands(fieldSpec{DB: "Space/Work", Name: "Space/Assignee", Kind: "user", Many: true},
+		func() string { n++; return fmt.Sprintf("id-%d", n) })
+	require.NoError(t, err)
+	sch := c.Args.(map[string]any)["commands"].([]any)[0].(map[string]any)["args"].(map[string]any)["commands"].([]any)
+	require.Len(t, sch, 2)
+	here := sch[0].(map[string]any)["args"].(map[string]any)
+	assert.Equal(t, "fibery/user", here["fibery/type"])
+	assert.Equal(t, map[string]any{"fibery/relation": "id-1", "fibery/collection?": true}, here["fibery/meta"])
+	back := sch[1].(map[string]any)["args"].(map[string]any)
+	assert.Equal(t, "fibery/user", back["fibery/holder-type"])
+	assert.Equal(t, "user/Work (Space - Assignee)", back["fibery/name"])
+}

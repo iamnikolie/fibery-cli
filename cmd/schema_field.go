@@ -14,7 +14,7 @@ import (
 type fieldSpec struct {
 	DB       string
 	Name     string // full "Space/Field"
-	Kind     string // text|url|email|phone|int|decimal|bool|date|date-time|rich-text|single-select|relation
+	Kind     string // text|url|email|phone|int|decimal|bool|date|date-time|rich-text|single-select|relation|user
 	Options  []string
 	Default  string
 	Required bool
@@ -112,6 +112,19 @@ func fieldAddCommands(s fieldSpec, newID func() string) (client.Command, error) 
 		if len(metaCmds) > 0 {
 			after = append(after, schemaBatch(metaCmds))
 		}
+	case s.Kind == "user":
+		// A user field is a relation to fibery/user whose back field lives in the
+		// "user" space, named the way the UI names it.
+		rel := newID()
+		here := map[string]any{"fibery/relation": rel}
+		if s.Many {
+			here["fibery/collection?"] = true
+		}
+		back := userBackField(s.DB, s.Name)
+		schemaCmds = append(schemaCmds,
+			fieldCreate(s.DB, s.Name, "fibery/user", here),
+			fieldCreate("fibery/user", back, s.DB, map[string]any{"fibery/relation": rel, "fibery/collection?": true}),
+		)
 	case s.Kind == "relation":
 		if s.To == "" {
 			return client.Command{}, fmt.Errorf("relation needs --to <database>")
@@ -133,13 +146,19 @@ func fieldAddCommands(s fieldSpec, newID func() string) (client.Command, error) 
 			fieldCreate(s.To, back, s.DB, map[string]any{"fibery/relation": rel, "fibery/collection?": true}),
 		)
 	default:
-		return client.Command{}, fmt.Errorf("unknown --type %q (text, url, email, phone, int, decimal, bool, date, date-time, rich-text, single-select, relation)", s.Kind)
+		return client.Command{}, fmt.Errorf("unknown --type %q (text, url, email, phone, int, decimal, bool, date, date-time, rich-text, single-select, relation, user)", s.Kind)
 	}
 	if s.Required && s.Kind != "single-select" {
 		return client.Command{}, fmt.Errorf("--required is only supported for single-select")
 	}
 	cmds := append([]any{schemaBatch(schemaCmds)}, after...)
 	return client.Command{Command: "fibery.command/batch", Args: map[string]any{"commands": cmds}}, nil
+}
+
+// userBackField is the UI's name for the back side of a user field:
+// "user/Tasks (Space - Assignee)".
+func userBackField(db, field string) string {
+	return fmt.Sprintf("user/%s (%s - %s)", localName(db), spaceOf(db), localName(field))
 }
 
 func fieldCreate(holder, name, typ string, meta map[string]any) map[string]any {
@@ -273,6 +292,7 @@ Examples:
   fibery schema field add "Space/Database" Notes --type rich-text
   fibery schema field add "Space/Database" Project --type single-select \
     --option Alpha --option Beta --default Alpha
+  fibery schema field add "Space/Database" Assignee --type user --many
   fibery schema field add "Space/Database" Epic --type relation --to "Space/Epic"
   fibery schema field add "Space/Database" Tags --type relation --to "Space/Tag" --many --dry-run`,
 	Args: cobra.ExactArgs(2),
@@ -473,7 +493,7 @@ func resync(cmd *cobra.Command) {
 
 func init() {
 	f := schemaFieldAddCmd.Flags()
-	f.StringVar(&fieldAddSpec.Kind, "type", "", "text|url|email|phone|int|decimal|bool|date|date-time|rich-text|single-select|relation (required)")
+	f.StringVar(&fieldAddSpec.Kind, "type", "", "text|url|email|phone|int|decimal|bool|date|date-time|rich-text|single-select|relation|user (required)")
 	f.StringArrayVar(&fieldAddSpec.Options, "option", nil, "single-select option (repeatable, in order)")
 	f.StringVar(&fieldAddSpec.Default, "default", "", "single-select default option")
 	f.BoolVar(&fieldAddSpec.Required, "required", false, "single-select: value required (needs --default)")
