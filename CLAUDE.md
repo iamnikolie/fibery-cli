@@ -36,6 +36,7 @@ cmd/
   config.go                    fibery config init
   schema.go                    schema / schema sync / schema show / schema enums
   schema_db.go                 schema refs, schema db delete (helper-type discovery, atomic delete batch)
+  schema_db_create.go          schema db create (type + mixins batch, workflow state replacement)
   schema_field.go              schema field add/delete/rename, schema db rename (pure batch builders)
   export.go                    export: databases/spaces → Markdown + JSON archive, files relinked locally
   search.go                    fibery search
@@ -263,6 +264,19 @@ These are not documented anywhere except in the wild; encode them into helpers r
     `workflow/state` is a mixin field that `schema.field/delete` rejects.
     `dbComponents` finds the helper types by the `_<db>` suffix; `dbDeleteBatch`
     builds the batch.
+
+20. **Creating a database** is documented (`schema.type/create` + `fibery.app/install-mixins`)
+    but the documented example is refused: the title field must not carry
+    `fibery/secured? false` (`schema-type-fields-not-secured`) — omit the key.
+    The UI's mixins are `fibery/rank-mixin`, `Collaboration~Documents/ReferencesMixin`,
+    `workflow/workflow`, `comments/comments-mixin`; attachments are a `fibery/file`
+    collection field with `entity-component?`, not a mixin. `workflow/workflow`
+    seeds To Do / In Progress / Done. A state's `workflow/Type` ("Not started",
+    "Started", "Finished") is read-only after create (`entity-update-read-only-fields-invalid`)
+    but accepted in `fibery.entity/create`; without it the type is `Unknown`. To
+    drop a built-in state, move the field's `fibery/default-value` first.
+    `fibery/creation-date` / `fibery/created-by` are accepted on entity create,
+    and on `comments/comment` (with `comment/author`) — migrations keep authors and dates.
 
 ---
 

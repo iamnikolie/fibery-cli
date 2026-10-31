@@ -91,6 +91,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery schema show <db>` (alias `fields`) | Field table (name / type / kind / required) | — |
 | `fibery schema enums <db>` | Enum field values with fibery/id | — |
 | `fibery schema refs <db>` | Relations out of / into a database + the helper types it owns (enums, workflow) | `--json` |
+| `fibery schema db create <db>` | Create a database with Name, Description, Files, workflow and comments; `--state` sets the workflow | `--state` (repeatable), `--no-workflow`, `--no-comments`, `--no-files`, `--no-description`, `--color`, `--dry-run`, `--yes` (required) |
 | `fibery schema db delete <db>` | Delete a database with its enums and workflow in one atomic batch; prints the plan first | `--dry-run`, `--yes` (required), `--delete-entities` |
 | `fibery schema db rename <db> <new>` | Rename a database within its space (entities and ids kept) | `--dry-run`, `--yes` (required) |
 | `fibery schema field add <db> <field>` | Add a field: text/url/email/phone/int/decimal/bool/date/date-time/rich-text/single-select/relation | `--type` (required), `--option` (repeatable), `--default`, `--required`, `--to`, `--back-name`, `--many`, `--dry-run`, `--yes` (required) |
@@ -720,9 +721,24 @@ single-select's option type with it; built-in/mixin fields (`workflow/state`,
 `comments/*`, `fibery/*`) are refused. A field holding values is refused by
 Fibery unless `--delete-values`. Every command re-syncs the schema cache.
 
-There is no `db create`: a usable database needs workflow, comments, files and
-rich-text mixins whose install commands are not in the public API docs — create
-it in the UI, or reuse an existing database and add fields to it.
+`db create` makes a database the way the UI does: Name as title, Description
+(rich text), Files, and the rank, references, workflow and comments extensions
+(`--no-workflow`, `--no-comments`, `--no-files`, `--no-description` drop one).
+`--state` (repeatable, in order) replaces the built-in To Do / In Progress / Done;
+`"Name=not-started|started|finished"` sets the type, which Fibery only accepts when
+the state is created. Without `=type` common names decide (Backlog, To Do →
+not-started; Done, Rejected → finished), else first/last/middle. The first state
+is the default. No view is created — add one with `view create`.
+
+```bash
+fibery schema db create "Space/Work" --state Backlog --state "In Progress" \
+  --state Review --state Done --state Rejected --dry-run
+```
+
+Migrating entities: `fibery.entity/create` accepts `fibery/creation-date` and
+`fibery/created-by`, and a `comments/comment` accepts `fibery/created-by`,
+`comment/author` and `fibery/creation-date` — so copied entities and comments
+keep their original author and date.
 
 Why a command and not `exec`: a database owns helper types — one per
 single-select field (`Space/Priority_Space/Database`) and its workflow

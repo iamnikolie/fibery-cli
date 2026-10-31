@@ -91,6 +91,7 @@ fibery schema refs "Development/Dev Task"   # relations out/in + helper types (e
 Change the schema:
 
 ```bash
+fibery schema db create "Space/Work" --state Backlog --state "In Progress" --state Done --yes   # Name, Description, Files, workflow, comments
 fibery schema db delete "Space/Database" --dry-run   # plan: entities, helper types, fields that go
 fibery schema db delete "Space/Database" --yes       # delete database + its enums/workflow atomically
 fibery schema db delete "Space/Database" --delete-entities --yes   # also when it has entities
