@@ -87,6 +87,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery schema field add <db> <field>` | Add a field: text/url/email/phone/int/decimal/bool/date/date-time/rich-text/single-select/relation | `--type` (required), `--option` (repeatable), `--default`, `--required`, `--to`, `--back-name`, `--many`, `--dry-run`, `--yes` (required) |
 | `fibery schema field delete <db> <field>` | Delete a field; both sides of a relation, a single-select's option type | `--delete-values`, `--dry-run`, `--yes` (required) |
 | `fibery schema field rename <db> <field> <new>` | Rename a field (values kept) | `--dry-run`, `--yes` (required) |
+| `fibery export [db...]` | Offline archive: entities.json + one Markdown per entity (fields, docs, comments, files; pasted images downloaded and relinked) | `--out` (required), `--space` (repeatable; all its databases + wiki docs), `--no-files`, `--no-comments` |
 | `fibery skill` | Print this skill reference | — |
 | `fibery version` | Print version, commit and build date | also `--version` |
 
@@ -430,6 +431,24 @@ Pass one or more database names. For deterministic snapshots comparable across r
 fibery inbox "Development/Dev Task" --absolute --hours 24
 fibery inbox "Development/Dev Task" "Development/bug" --hours 72
 ```
+
+## Archiving before a delete
+
+`fibery export` writes everything a database holds to disk, so it can be deleted
+without losing the content. Run it before `schema db delete --delete-entities`.
+
+```bash
+fibery export --space Space --out ./archive               # every database of the space + its wiki docs
+fibery export "Space/Database" --out ./archive --no-files
+```
+
+Layout: `<out>/<Space>/<Database>/entities.json` (all fields; to-many relations as
+public id + title), `<id>-<slug>.md` per entity (field table, document bodies,
+comments with author and date, attachments), `files/<id>/…`; wiki documents under
+`<out>/<Space>/wiki/`; `manifest.json` has counts and errors per source. Images
+pasted into documents and comments are downloaded and their links rewritten to
+the local copy — the archive does not point back at Fibery. Exit code 1 when any
+item failed; the failures are listed in the manifest.
 
 ## Destructive operations
 

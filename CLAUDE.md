@@ -37,6 +37,7 @@ cmd/
   schema.go                    schema / schema sync / schema show / schema enums
   schema_db.go                 schema refs, schema db delete (helper-type discovery, atomic delete batch)
   schema_field.go              schema field add/delete/rename, schema db rename (pure batch builders)
+  export.go                    export: databases/spaces → Markdown + JSON archive, files relinked locally
   search.go                    fibery search
   list.go                      fibery list
   query.go                     fibery query (raw FQL)

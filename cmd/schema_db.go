@@ -155,6 +155,16 @@ Example:
 		}
 		out, in := dbRefs(schema, db)
 		comps := dbComponents(schema, db)
+		// empty lists, not null, in --json
+		if out == nil {
+			out = []schemaRef{}
+		}
+		if in == nil {
+			in = []schemaRef{}
+		}
+		if comps == nil {
+			comps = []string{}
+		}
 		raw, _ := json.Marshal(map[string]any{"database": db, "out": out, "in": in, "components": comps})
 		return outputJSON(raw, func() error {
 			fmt.Printf("## %s\n", db)

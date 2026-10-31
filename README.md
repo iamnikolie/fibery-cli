@@ -355,6 +355,18 @@ fibery view delete 2930 --yes   # removes the inline block from the owner too
 enum values match by name, users by email, relations by public id. `--where` / `--params`
 take raw FQL (field names are translated to ids; sub-queries need ids).
 
+### Archive
+
+```bash
+fibery export --space Space --out ./archive          # every database of a space + its wiki documents
+fibery export "Space/Database" --out ./archive       # one database
+```
+
+Writes `entities.json` (every field) and one Markdown file per entity — fields,
+document bodies, comments with author and date, attachments — plus `manifest.json`
+with counts and errors. Pasted images are downloaded and relinked, so the archive
+stands on its own after the source is deleted.
+
 ### Files
 
 ```bash
