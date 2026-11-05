@@ -55,7 +55,7 @@ func moveFixture() map[string]any {
 }
 
 func TestBuildMovePlan(t *testing.T) {
-	p, err := buildMovePlan(moveFixture(), "Old/Tasks", "New/Work", map[string]string{"Old/Module": "New/Legacy module"})
+	p, err := buildMovePlan(moveFixture(), moveFixture(), "Old/Tasks", "New/Work", map[string]string{"Old/Module": "New/Legacy module"}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "Old/Name", p.SrcTitle)
 	assert.Equal(t, "New/Name", p.DstTitle)
@@ -88,18 +88,18 @@ func TestBuildMovePlan(t *testing.T) {
 
 func TestBuildMovePlanErrors(t *testing.T) {
 	s := moveFixture()
-	_, err := buildMovePlan(s, "Old/Tasks", "Old/Tasks", nil)
+	_, err := buildMovePlan(s, s, "Old/Tasks", "Old/Tasks", nil, false)
 	assert.Error(t, err)
-	_, err = buildMovePlan(s, "Old/Nope", "New/Work", nil)
+	_, err = buildMovePlan(s, s, "Old/Nope", "New/Work", nil, false)
 	assert.Error(t, err)
-	_, err = buildMovePlan(s, "Old/Tasks", "New/Work", map[string]string{"Old/Module": "New/Estimate"})
+	_, err = buildMovePlan(s, s, "Old/Tasks", "New/Work", map[string]string{"Old/Module": "New/Estimate"}, false)
 	assert.Error(t, err, "text target must be a text field")
-	_, err = buildMovePlan(s, "Old/Tasks", "New/Work", map[string]string{"Old/Nope": "New/Legacy module"})
+	_, err = buildMovePlan(s, s, "Old/Tasks", "New/Work", map[string]string{"Old/Nope": "New/Legacy module"}, false)
 	assert.Error(t, err)
 }
 
 func TestMoveSelectShapes(t *testing.T) {
-	p, err := buildMovePlan(moveFixture(), "Old/Tasks", "New/Work", nil)
+	p, err := buildMovePlan(moveFixture(), moveFixture(), "Old/Tasks", "New/Work", nil, false)
 	require.NoError(t, err)
 	sel := moveSelect(p)
 	assert.Equal(t, []any{"workflow/state", "enum/name"}, sel["state"])
@@ -157,8 +157,8 @@ func TestTargetStateAndPairs(t *testing.T) {
 }
 
 func TestBuildMovePlanTextFromEnumAndUser(t *testing.T) {
-	p, err := buildMovePlan(moveFixture(), "Old/Tasks", "New/Work", map[string]string{
-		"Old/Priority": "New/Legacy module", "Old/Assignee": "New/Legacy module"})
+	p, err := buildMovePlan(moveFixture(), moveFixture(), "Old/Tasks", "New/Work", map[string]string{
+		"Old/Priority": "New/Legacy module", "Old/Assignee": "New/Legacy module"}, false)
 	require.NoError(t, err)
 	titles := map[string]string{}
 	for _, f := range p.Fields {

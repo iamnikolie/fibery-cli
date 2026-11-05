@@ -292,7 +292,7 @@ func loadSpaces(cmd *cobra.Command) ([]spaceSummary, error) {
 
 var spaceCmd = &cobra.Command{
 	Use:   "space",
-	Short: "List and delete spaces",
+	Short: "List, create and delete spaces",
 }
 
 var spaceListCmd = &cobra.Command{

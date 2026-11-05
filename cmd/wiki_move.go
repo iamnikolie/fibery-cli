@@ -204,13 +204,14 @@ Examples:
 			return err
 		}
 		secret := client.NewUUID()
+		var fill func() error
 		if wikiCreateFile != "" {
 			md, err := os.ReadFile(wikiCreateFile)
 			if err != nil {
 				return err
 			}
-			if err := cli.CreateDocumentMarkdown(ctx, secret, string(md)); err != nil {
-				return err
+			if len(md) > 0 {
+				fill = func() error { return cli.CreateDocumentMarkdown(ctx, secret, string(md)) }
 			}
 		} else {
 			if wikiCreateFromDB == "" {
@@ -237,12 +238,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			if err := cli.CreateDocumentMarkdown(ctx, secret, ""); err != nil {
-				return err
-			}
-			if err := cli.SetDocumentJSON(ctx, secret, doc.Content); err != nil {
-				return err
-			}
+			fill = func() error { return cli.SetDocumentJSON(ctx, secret, doc.Content) }
 		}
 		folderID, _, err := ensureFolderPath(cmd, appID, wikiCreateFolder)
 		if err != nil {
@@ -258,6 +254,9 @@ Examples:
 			"fibery/container-app":  ref(appID),
 			"fibery/Folder":         ref(folderID),
 		}}); err != nil {
+			return err
+		}
+		if err := writeNewDoc(ctx, cli, id, secret, fill); err != nil {
 			return err
 		}
 		got, err := findView(ctx, id)

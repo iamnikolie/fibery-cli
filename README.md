@@ -92,6 +92,7 @@ Move entities to another database (fields by name; docs, files, comments, author
 
 ```bash
 fibery move "Old/Tasks" --to "New/Work" --legacy-id "Legacy ID" --set Project=Old --dry-run
+fibery move "Space/Work" --to "Space/Work" --to-config other --legacy-id "Source ID" --out work.json --dry-run   # into another workspace
 ```
 
 Change the schema:
@@ -385,6 +386,7 @@ stands on its own after the source is deleted.
 
 ```bash
 fibery space list                          # own spaces: databases, views, wiki docs, folders
+fibery space create Development --yes      # empty space, ready for schema db create
 fibery space delete "Old Space" --dry-run  # refused while it has databases
 fibery folder list --space "Old Space" --empty
 fibery folder delete 9 4 5 7 --yes         # empty folders; nested ones named together
@@ -392,6 +394,7 @@ fibery folder create Development "Archive/LINC/Web3"          # missing parts ar
 fibery view move 102 103 --space Development --folder "Archive/LINC/Web3"
 fibery wiki create --space Development --folder Archive --name "Notes" --file notes.md
 fibery wiki create --space Development --folder Archive --name "README" --from 11 --from-db "Space/Document"
+fibery wiki copy --to-config other --space Development --folder Archive --id-map work.json --dry-run   # folders into another workspace
 ```
 
 ### Files

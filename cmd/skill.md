@@ -52,7 +52,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery update <id> [field=value...]` | Update entity; repeat field to append to multi-select | `--db` (required), `--doc`, `--doc-file`, `--skip-invalid`, `--create-missing-enum` |
 | `fibery delete <id>` | Delete entity (requires `--yes`) | `--db` (required), `--yes` (required) |
 | `fibery exec <json>` | Send any raw Fibery command; destructive ones require `--yes` | `--yes` (for delete/remove/drop) |
-| `fibery move <db> --to <db>` | Copy entities to another database: fields by name, rich text as JSON, files and pasted images re-uploaded, comments with author/date/replies, creation date and author kept; source untouched; re-runs skip copied ones | `--to`, `--legacy-id` (required), `--set`, `--state-map`, `--text`, `--filter`, `--limit`, `--out`, `--dry-run`, `--yes` |
+| `fibery move <db> --to <db>` | Copy entities to another database: fields by name, rich text as JSON, files and pasted images re-uploaded, comments with author/date/replies, creation date and author kept; source untouched; re-runs skip copied ones | `--to`, `--legacy-id` (required), `--to-config` (another workspace), `--set`, `--state-map`, `--text`, `--filter` \| `--where`/`--params`, `--limit`, `--out`, `--dry-run`, `--yes` |
 | `fibery import` | Bulk create from JSON array; JSON arrays in values → collection fields | `--db` (required), `--file` (required), `--create-missing-enum` |
 | `fibery state <id> <state-name>` | Set workflow state (case-insensitive) | `--db` (required) |
 | `fibery comment <url-or-id> [text]` | Add comment (explicit form `comment add`); optionally @mention users, reference entities, reply, or embed screenshots/images inline | `--db`, `--mention <email>`, `--ref <url-or-id>`, `--reply-to <comment-id>`, `--image <path>` (repeatable), `--clipboard` |
@@ -79,6 +79,8 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery folder delete <id>...` | Delete empty folders (nested ones only when named too; children first) | `--yes` (required) |
 | `fibery view move <view>...` | Move views or wiki documents to a space and folder; nested pages are taken out of their parent | `--space` (required), `--folder <path>` |
 | `fibery wiki create` | New wiki document from a Markdown file, or a copy of an entity's rich text (JSON, formatting kept) | `--space`, `--name` (required), `--folder`, `--file` \| `--from <id> --from-db <db> [--from-field]` |
+| `fibery wiki copy` | Copy the wiki documents of folders (subfolders included) into another workspace: folder paths recreated, JSON bodies with inline comments, images re-uploaded, mentions remapped | `--to-config`, `--space`, `--folder` (repeatable, required), `--to-space`, `--id-map` (a `move --out` file), `--out`, `--dry-run`, `--yes` |
+| `fibery space create <space>` | Create an empty space (fibery.app/save + install), ready for `schema db create` | `--color`, `--icon`, `--dry-run`, `--yes` (required) |
 | `fibery space list` | The workspace's own spaces with databases, views, wiki documents, folders | `--json` |
 | `fibery space delete <space>` | Delete a space with no databases (fibery.app/uninstall + delete) together with its views, documents and folders; built-in spaces refused | `--dry-run`, `--yes` (required) |
 | `fibery files list <entity-id>` | List file attachments on an entity | `--db` (required), `--field` |
@@ -715,6 +717,25 @@ fibery move "Old/Tasks" --to "New/Work" --legacy-id "Legacy ID" \
 - `--set` fills a field on every copy; `--text` writes a relation's titles into
   a text field; `--filter` moves a subset. The source is never changed —
   delete it with `schema db delete` once the copy is checked.
+
+### Into another workspace
+
+`--to-config <account>` writes the copies into that account's workspace
+(`~/.fibery/<account>/`, its schema synced). Users go by email; one the target
+lacks becomes the target token's user, and their name opens each comment they
+wrote. Embedded views are dropped — they belong to the source workspace. The
+legacy id reads `"<workspace>:Old/Tasks #42"`. Wiki documents follow with
+`wiki copy`; pass the move's `--out` file as `--id-map` so mentions of moved
+entities in the documents point at the copies.
+
+```bash
+fibery --config other space create Development --yes
+fibery --config other schema db create "Development/Work" --state Backlog --state Done --yes
+fibery move "Development/Work" --to "Development/Work" --to-config other --legacy-id "Source ID" \
+  --where '["q/in",["Development/Project","enum/name"],"$p"]' --params '{"$p":["Alpha","Beta"]}' \
+  --out work.json --dry-run
+fibery wiki copy --to-config other --space Development --folder "Archive/Alpha" --id-map work.json --dry-run
+```
 
 ## Changing the schema
 
