@@ -41,12 +41,7 @@ func List(w io.Writer, data json.RawMessage) error {
 	for _, item := range items {
 		cells := make([]string, len(keys))
 		for i, k := range keys {
-			v := item[k]
-			if v == nil {
-				cells[i] = ""
-			} else {
-				cells[i] = fmt.Sprintf("%v", v)
-			}
+			cells[i] = cell(item[k])
 		}
 		fmt.Fprintf(w, "| %s |\n", strings.Join(cells, " | "))
 	}
@@ -103,11 +98,7 @@ func separatedValues(w io.Writer, data json.RawMessage, sep string) error {
 	for _, item := range items {
 		cells := make([]string, len(keys))
 		for i, k := range keys {
-			v := item[k]
-			s := ""
-			if v != nil {
-				s = fmt.Sprintf("%v", v)
-			}
+			s := cell(item[k])
 			if sep == "," && strings.ContainsAny(s, ",\"\n") {
 				s = `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 			}
@@ -116,4 +107,36 @@ func separatedValues(w io.Writer, data json.RawMessage, sep string) error {
 		fmt.Fprintln(w, strings.Join(cells, sep))
 	}
 	return nil
+}
+
+// cell formats one value for a table or CSV row. A sub-query result (a collection
+// read with --fields) becomes "<Public ID> <Name>" items joined by "; ".
+func cell(v any) string {
+	switch val := v.(type) {
+	case nil:
+		return ""
+	case []any:
+		parts := make([]string, 0, len(val))
+		for _, item := range val {
+			m, ok := item.(map[string]any)
+			if !ok {
+				parts = append(parts, fmt.Sprintf("%v", item))
+				continue
+			}
+			pid, name := m["Public ID"], m["Name"]
+			switch {
+			case pid != nil && name != nil:
+				parts = append(parts, fmt.Sprintf("%v %v", pid, name))
+			case pid != nil:
+				parts = append(parts, fmt.Sprintf("%v", pid))
+			case name != nil:
+				parts = append(parts, fmt.Sprintf("%v", name))
+			default:
+				parts = append(parts, fmt.Sprintf("%v", m))
+			}
+		}
+		return strings.Join(parts, "; ")
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }

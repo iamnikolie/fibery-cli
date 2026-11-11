@@ -69,7 +69,7 @@ func printEntityLLMFull(ctx context.Context, raw json.RawMessage, db string, doc
 			var names []string
 			for _, item := range val {
 				if m, ok := item.(map[string]any); ok {
-					if n := asStr(m["Name"]); n != "" {
+					if n := strings.TrimSpace(asStr(m["Public ID"]) + " " + asStr(m["Name"])); n != "" {
 						names = append(names, n)
 					}
 				}

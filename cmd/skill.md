@@ -64,9 +64,9 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery comment-inline reply <url-or-id> --thread <id> "<body>"` | Reply within an inline comment thread | `--db`, `--field`, `--thread` (required) |
 | `fibery comment-inline resolve <url-or-id> --thread <id>` | Resolve or reopen a thread | `--db`, `--field`, `--thread` (required), `--reopen` |
 | `fibery comment-inline delete <url-or-id> --thread <id>` | Delete an inline comment thread | `--db`, `--field`, `--thread` (required) |
-| `fibery doc get <secret\|id\|url>` | Get document as Markdown | `--db`, `--field` (entity ID), `--secret` (raw UUID secret) |
-| `fibery doc set <secret\|id\|url> <md>` | Set document content (full replace) | `--db`, `--field`, `--secret` |
-| `fibery doc append <secret\|id\|url> <md>` | Append Markdown to the end of a document; existing content (inline comments, views, mentions) is kept untouched | `--db`, `--field`, `--secret` |
+| `fibery doc get <secret\|id\|url>` | Get document as Markdown (callouts in Fibery's native form) | `--db`, `--field` (entity ID), `--secret` (raw UUID secret), `--json-doc` (ProseMirror envelope + `modificationDate`) |
+| `fibery doc set <secret\|id\|url> [md]` | Set document content (full replace) | `--db`, `--field`, `--secret`, `--file` (verbatim, `-` = stdin), `--json-doc <file>`, `--if-unmodified-since <modificationDate>` |
+| `fibery doc append <secret\|id\|url> [md]` | Append Markdown to the end of a document; existing content (inline comments, views, mentions) is kept untouched | `--db`, `--field`, `--secret`, `--file`, `--if-unmodified-since` |
 | `fibery wiki list` | List space/wiki documents (left-nav pages); `docs list` also works | `--space`, `--limit` |
 | `fibery view create` | Create a list/table/board view over a database; `--embed` puts it inline in an entity's rich text | `--db`, `--name` (required), `--type list\|table\|board`, `--columns`, `--rows` (board), `--filter` (repeatable), `--any`, `--where`, `--params`, `--embed`, `--embed-db`, `--embed-field`, `--after-heading` |
 | `fibery view embed <view>` | Insert an existing view (uuid or public id) inline into a rich-text field | `--embed` (required), `--embed-db`, `--embed-field`, `--after-heading` |
@@ -189,6 +189,56 @@ fibery update DT-42 --db "Development/Dev Task" \
 ```
 
 `--doc` and `--doc-file` are both repeatable and may be combined (different fields).
+
+`doc set` / `doc append` take the body the same two ways: positional text
+(escapes interpreted) or `--file <path>` (verbatim; `-` reads stdin).
+
+```bash
+fibery doc set 42 --db "Development/Dev Task" --field "Development/Description" --file body.md
+fibery doc append 42 --db "Development/Dev Task" --field "Development/Description" --file section.md
+```
+
+### Callouts
+
+Every Markdown write (`doc set/append`, `create/update --doc/--doc-file`,
+`import`, `comment`, `comment edit`, `wiki create --file`) accepts callouts in
+two forms:
+
+```markdown
+> [!NOTE]
+> Blue callout (exclamation-circle). Heading, lists, code inside work.
+
+> [!CAUTION]
+> Red callout (x).
+
+> [//]: # (callout;icon-type=icon;icon=exclamation-circle;color=#199EE3)
+> Native form — any color/icon a UI-made callout carries.
+```
+
+`[!NOTE]` and `[!CAUTION]` are the only short forms; any other `[!KIND]` stays
+a plain quote, and a marker inside fenced code is left alone. `doc get` returns
+callouts in the native form, and writing that output back is lossless — so
+get → edit → set keeps callouts made in the UI. Copy the native line from
+`doc get` of a document that has the callout you want.
+
+### Safe overwrite and raw JSON
+
+```bash
+# Read the modificationDate, edit, write only if nobody changed the doc since
+M=$(fibery doc get 42 --db "Development/Dev Task" --field "Development/Description" --json-doc | jq -r .modificationDate)
+fibery doc set 42 --db "Development/Dev Task" --field "Development/Description" \
+  --file body.md --if-unmodified-since "$M"     # refuses if the doc changed
+
+# ProseMirror JSON — for nodes Markdown cannot carry
+fibery doc get 42 --db "Development/Dev Task" --field "Development/Description" --json-doc > doc.json
+fibery doc set 42 --db "Development/Dev Task" --field "Development/Description" --json-doc doc.json
+```
+
+`--json-doc` on `set` takes the `doc get --json-doc` envelope or a bare
+`{doc, comments}`; without a `comments` array (or with `null`) the document keeps
+its inline comments — their anchors are not remapped, so edit `doc` in place or pass
+`comments` yourself. The guard and the write are separate requests: it narrows
+the race with a UI edit, it does not close it.
 
 ## Views (lists/tables), incl. inline views in rich text
 
@@ -319,6 +369,14 @@ fibery resolve <url> --fields "Name,State"
 
 The always-keep set (`fibery/id`, `Public ID`, `Name`) is preserved regardless,
 so the entity stays identifiable.
+
+Collection relations (`Stories`, `Dev epics`, formula collections, …) are left
+out of the default read but can be named in `--fields`; each item prints as
+`<public id> <name>` (users and enums by name):
+
+```bash
+fibery get 252 --db "Releases/Release" --fields "Name,Stories,Dev epics Stories"
+```
 
 Rich-text document bodies (`Description` etc.) are the single biggest token
 sink, so `get`/`resolve` **hide them by default** — you get every scalar and

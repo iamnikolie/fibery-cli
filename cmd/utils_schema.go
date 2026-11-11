@@ -305,6 +305,70 @@ func buildFullSelect(schema map[string]any, db string) (sel map[string]any, docK
 	return sel, docKeys
 }
 
+// withCollectionSelects returns sel plus a sub-query for every collection relation
+// of db that sel lacks. buildFullSelect leaves collections out to keep the default
+// read small, so get/resolve/list add them only when --fields names fields.
+func withCollectionSelects(sel map[string]any, schema map[string]any, db string) map[string]any {
+	out := make(map[string]any, len(sel))
+	for k, v := range sel {
+		out[k] = v
+	}
+	types, _ := schema["fibery/types"].([]any)
+	for _, t := range types {
+		tm, ok := t.(map[string]any)
+		if !ok || asStr(tm["fibery/name"]) != db {
+			continue
+		}
+		for _, f := range mustSlice(tm["fibery/fields"]) {
+			fm, ok := f.(map[string]any)
+			if !ok {
+				continue
+			}
+			meta, _ := fm["fibery/meta"].(map[string]any)
+			fieldType := asStr(fm["fibery/type"])
+			if meta["fibery/collection?"] != true || skipFieldTypes[fieldType] {
+				continue
+			}
+			alias := fieldAlias(asStr(fm["fibery/name"]))
+			if _, taken := out[alias]; taken {
+				continue
+			}
+			if sub := collectionItemSelect(schema, fieldType); sub != nil {
+				out[alias] = map[string]any{
+					"q/from":   asStr(fm["fibery/name"]),
+					"q/select": sub,
+					"q/limit":  "q/no-limit",
+				}
+			}
+		}
+		break
+	}
+	return out
+}
+
+// collectionItemSelect is the per-item select for a collection whose items are of
+// type target: public id and title for entities, name for users and enums. Nil
+// when the target exposes neither.
+func collectionItemSelect(schema map[string]any, target string) map[string]any {
+	switch {
+	case target == "fibery/user":
+		return map[string]any{"Name": "user/name", "Email": "user/email"}
+	case isEnumLikeType(target):
+		return map[string]any{"Name": "enum/name"}
+	}
+	sub := map[string]any{}
+	if schemaHasField(schema, target, "fibery/public-id") {
+		sub["Public ID"] = "fibery/public-id"
+	}
+	if title := findTitleField(schema, target); title != "" {
+		sub["Name"] = title
+	}
+	if len(sub) == 0 {
+		return nil
+	}
+	return sub
+}
+
 // isEnumLikeType returns true for enum and workflow state types.
 // These types have the pattern "Space/Type_Space/Database" or "workflow/state_*".
 func isEnumLikeType(t string) bool {

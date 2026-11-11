@@ -86,6 +86,7 @@ Examples:
 			// User asked for specific fields — start from the full schema-driven
 			// select and filter. Always keep ID and Name so rows stay identifiable.
 			full, _ := buildFullSelect(schema, db)
+			full = withCollectionSelects(full, schema, db)
 			filtered, err := filterSelectByAliases(full, listFields, "Public ID", "Name")
 			if err != nil {
 				return err

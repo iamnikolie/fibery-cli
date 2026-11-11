@@ -66,6 +66,9 @@ Script-friendly (extract the UUID):
 		}
 		schema, _ := cache.LoadSchema(account)
 		sel, docKeys := buildFullSelect(schema, getDB)
+		if len(getFields) > 0 {
+			sel = withCollectionSelects(sel, schema, getDB)
+		}
 		sel, docKeys, errNarrow := narrowReadSelect(sel, docKeys, getFields, getNoDocs, "fibery/id", "Public ID", "Name")
 		if errNarrow != nil {
 			return errNarrow
