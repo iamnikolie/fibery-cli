@@ -73,3 +73,61 @@ func TestExpandCallouts_AfterQuoteEnds(t *testing.T) {
 	in := "> plain\n\n> [!CAUTION]\n> x"
 	assert.Equal(t, "> plain\n\n> [//]: # (callout;icon-type=icon;icon=x;color=#d40915)\n> x", ExpandCallouts(in))
 }
+
+func TestExpandCallouts_FenceInListItem(t *testing.T) {
+	note := "> [//]: # (callout;icon-type=icon;icon=exclamation-circle;color=#199EE3)"
+	caution := "> [//]: # (callout;icon-type=icon;icon=x;color=#d40915)"
+	cases := []struct{ name, in, want string }{
+		{"backticks after a bullet",
+			"- ```markdown\n  > [!NOTE]\n  ```\n\n> [!NOTE]\n> x",
+			"- ```markdown\n  > [!NOTE]\n  ```\n\n" + note + "\n> x"},
+		{"tildes after a number",
+			"1. ~~~\n   > [!CAUTION]\n   ~~~\n\n> [!CAUTION]\n> y",
+			"1. ~~~\n   > [!CAUTION]\n   ~~~\n\n" + caution + "\n> y"},
+		{"fence at a nested item's indent",
+			"- a\n  - b\n\n    ```\n    > [!NOTE]\n    ```\n\n> [!NOTE]\n> x",
+			"- a\n  - b\n\n    ```\n    > [!NOTE]\n    ```\n\n" + note + "\n> x"},
+		{"fence ends with its list item",
+			"- ```\n  code\n\nplain\n\n> [!NOTE]\n> x",
+			"- ```\n  code\n\nplain\n\n" + note + "\n> x"},
+		{"fence line four spaces past the item's content is code, not a close",
+			"- ```markdown\n      ```\n  > [!NOTE]\n  ```\n\n> [!NOTE]\n> x",
+			"- ```markdown\n      ```\n  > [!NOTE]\n  ```\n\n" + note + "\n> x"},
+		{"fence at the item's content column ends with the item",
+			"- item\n  ```markdown\n  code\n\n> [!NOTE]\n> real",
+			"- item\n  ```markdown\n  code\n\n" + note + "\n> real"},
+		{"fence inside a nested item, closed at that item's column",
+			"1. a\n   - ```\n     > [!CAUTION]\n     ```\n\n> [!CAUTION]\n> y",
+			"1. a\n   - ```\n     > [!CAUTION]\n     ```\n\n" + caution + "\n> y"},
+		{"tab-indented fence inside an item",
+			"- a\n\n\t```\n\t> [!NOTE]\n\t```\n\n> [!NOTE]\n> x",
+			"- a\n\n\t```\n\t> [!NOTE]\n\t```\n\n" + note + "\n> x"},
+		{"indented fence outside a list is not a fence",
+			"para\n\n    ```\n\n> [!NOTE]\n> x",
+			"para\n\n    ```\n\n" + note + "\n> x"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, ExpandCallouts(c.in), c.name)
+	}
+}
+
+func TestExpandCallouts_ContainersFromTheParser(t *testing.T) {
+	note := "> [//]: # (callout;icon-type=icon;icon=exclamation-circle;color=#199EE3)"
+	cases := []struct{ name, in, want string }{
+		{"fence in a quote in a list item",
+			"- > ```markdown\n  > [!NOTE]\n  > ```\n\n> [!NOTE]\n> x",
+			"- > ```markdown\n  > [!NOTE]\n  > ```\n\n" + note + "\n> x"},
+		{"fence after a lazy continuation line stays in the item",
+			"- paragraph\nlazy continuation\n  ```markdown\n  code\n\n> [!NOTE]\n> real",
+			"- paragraph\nlazy continuation\n  ```markdown\n  code\n\n" + note + "\n> real"},
+		{"indented code", "para\n\n    > [!NOTE]\n\n> [!NOTE]\n> x",
+			"para\n\n    > [!NOTE]\n\n" + note + "\n> x"},
+		{"html block", "<div>\n> [!NOTE]\n</div>\n\n> [!NOTE]\n> x",
+			"<div>\n> [!NOTE]\n</div>\n\n" + note + "\n> x"},
+		{"alert in a list item", "- item\n\n  > [!NOTE]\n  > x",
+			"- item\n\n  " + note + "\n  > x"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, ExpandCallouts(c.in), c.name)
+	}
+}

@@ -277,6 +277,27 @@ func TestBuildFullSelect_IncludesFiberyID(t *testing.T) {
 		"buildFullSelect must include 'Public ID' for the human-readable ID")
 }
 
+func TestBuildFullSelect_URLFieldIsPrimitive(t *testing.T) {
+	schema := map[string]any{
+		"fibery/types": []any{
+			map[string]any{
+				"fibery/name": "Space/Database",
+				"fibery/fields": []any{
+					map[string]any{"fibery/name": "Space/Link", "fibery/type": "fibery/url"},
+					map[string]any{"fibery/name": "Space/Window", "fibery/type": "fibery/date-time-range"},
+					map[string]any{"fibery/name": "Space/Place", "fibery/type": "fibery/location"},
+				},
+			},
+		},
+	}
+	sel, _ := buildFullSelect(schema, "Space/Database")
+	// Primitive fields must be selected directly; navigating to fibery/public-id
+	// fails with entity.error/schema-field-not-found.
+	assert.Equal(t, []any{"Space/Link"}, sel["Link"])
+	assert.Equal(t, []any{"Space/Window"}, sel["Window"])
+	assert.Equal(t, []any{"Space/Place"}, sel["Place"])
+}
+
 func TestWithCollectionSelects(t *testing.T) {
 	field := func(name, typ string, meta map[string]any) map[string]any {
 		return map[string]any{"fibery/name": name, "fibery/type": typ, "fibery/meta": meta}
@@ -317,25 +338,4 @@ func TestWithCollectionSelects(t *testing.T) {
 	assert.NotContains(t, got, "Files", "file collections are skipped")
 	assert.NotContains(t, got, "Epic", "single relations are not collections")
 	assert.Len(t, base, 1, "input select is not mutated")
-}
-
-func TestBuildFullSelect_URLFieldIsPrimitive(t *testing.T) {
-	schema := map[string]any{
-		"fibery/types": []any{
-			map[string]any{
-				"fibery/name": "Space/Database",
-				"fibery/fields": []any{
-					map[string]any{"fibery/name": "Space/Link", "fibery/type": "fibery/url"},
-					map[string]any{"fibery/name": "Space/Window", "fibery/type": "fibery/date-time-range"},
-					map[string]any{"fibery/name": "Space/Place", "fibery/type": "fibery/location"},
-				},
-			},
-		},
-	}
-	sel, _ := buildFullSelect(schema, "Space/Database")
-	// Primitive fields must be selected directly; navigating to fibery/public-id
-	// fails with entity.error/schema-field-not-found.
-	assert.Equal(t, []any{"Space/Link"}, sel["Link"])
-	assert.Equal(t, []any{"Space/Window"}, sel["Window"])
-	assert.Equal(t, []any{"Space/Place"}, sel["Place"])
 }

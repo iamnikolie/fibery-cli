@@ -336,8 +336,7 @@ func (c *Client) SetDocumentJSON(ctx context.Context, secret string, content Doc
 // MarkdownToDocJSON converts Markdown to a ProseMirror doc using Fibery's own
 // converter: it writes the Markdown to a scratch document, reads it back as JSON
 // and deletes the scratch document. The result carries fresh node ids, so its
-// nodes can be spliced into another document. GitHub alert blockquotes are
-// converted to Fibery callouts (markdown.ExpandCallouts).
+// nodes can be spliced into another document. Callouts are expanded as in SetDocument.
 func (c *Client) MarkdownToDocJSON(ctx context.Context, md string) (json.RawMessage, error) {
 	secret := newUUID()
 	body, err := json.Marshal(map[string]any{
@@ -611,11 +610,12 @@ func (c *Client) CreateFolders(ctx context.Context, values []map[string]any) err
 }
 
 // CreateDocumentMarkdown creates (or overwrites) the document behind secret
-// from Markdown — a fresh secret becomes a new document.
-func (c *Client) CreateDocumentMarkdown(ctx context.Context, secret, markdown string) error {
+// from Markdown — a fresh secret becomes a new document. Callouts are expanded
+// as in SetDocument.
+func (c *Client) CreateDocumentMarkdown(ctx context.Context, secret, md string) error {
 	body, _ := json.Marshal(map[string]any{
 		"command": "create-or-update-documents",
-		"args":    []any{map[string]any{"secret": secret, "content": markdown}},
+		"args":    []any{map[string]any{"secret": secret, "content": markdown.ExpandCallouts(md)}},
 	})
 	if _, err := c.request(ctx, http.MethodPost, "/api/documents/commands?format=md", body); err != nil {
 		return fmt.Errorf("client.CreateDocumentMarkdown: %w", err)

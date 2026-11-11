@@ -89,17 +89,18 @@ Callouts: "> [!NOTE]" / "> [!CAUTION]" blockquotes become Fibery callouts; the
 native form "> [//]: # (callout;icon-type=icon;icon=x;color=#d40915)" passes through.
 
 --if-unmodified-since refuses the write when the document's modificationDate is
-later than the given one (take it from "doc get --json-doc").
+later than the given one (take it from "doc get --json-doc"). The check and the
+write are two requests, so it narrows the race with a UI edit rather than closing it.
 
 --json-doc without a "comments" array keeps the document's inline comments, but
 their anchors (ProseMirror from/to positions) are not remapped: change "doc" in
-place, or pass "comments" yourself. The check and the
-write are two requests, so it narrows the race with a UI edit rather than closing it.
+place, or pass "comments" yourself.
 
 Examples:
   fibery doc set abc123secret "# Title\n\nHello world"
   fibery doc set https://acme.fibery.io/Development/My-Doc-280 --file body.md
   fibery doc set 42 --db "Space/Database" --field "Space/Description" --file body.md
+  cat body.md | fibery doc set 42 --db "Space/Database" --field "Space/Description" --file -
   fibery doc set 42 --db "Space/Database" --field "Space/Description" --json-doc doc.json
   fibery doc set 42 --db "Space/Database" --field "Space/Description" --file body.md \
     --if-unmodified-since 2026-10-14T09:12:44.123Z`,
@@ -112,29 +113,57 @@ Examples:
 			return fmt.Errorf("--json-doc replaces the Markdown body: pass it without text or --file")
 		}
 		var body string
+		var jsonDoc []byte
+		var err error
 		if docSetJSONFile == "" {
-			var err error
 			if body, err = docBodyFromArgs(args, docFile); err != nil {
 				return err
 			}
+		} else if jsonDoc, err = readInput(docSetJSONFile); err != nil {
+			return fmt.Errorf("--json-doc: %w", err)
+		}
+		since, err := parseUnmodifiedSince(docIfUnmodifiedSince)
+		if err != nil {
+			return err
 		}
 		secret, err := resolveDocSecret(cmd, args[0])
 		if err != nil {
 			return err
 		}
-		if err := checkDocUnmodified(cmd.Context(), secret, docIfUnmodifiedSince); err != nil {
-			return err
-		}
-		if docSetJSONFile != "" {
-			content, err := readDocJSONFile(cmd.Context(), secret, docSetJSONFile)
+		if jsonDoc != nil {
+			content, hasComments, err := parseDocJSON(jsonDoc)
 			if err != nil {
 				return err
+			}
+			// One read serves both the guard and the kept comments.
+			if !since.IsZero() || !hasComments {
+				cur, err := cli.GetDocumentJSON(cmd.Context(), secret)
+				if err != nil {
+					return err
+				}
+				if err := checkDocUnmodified(cur, since); err != nil {
+					return err
+				}
+				if !hasComments {
+					content.Comments = cur.Content.Comments
+				}
 			}
 			if err := cli.SetDocumentJSON(cmd.Context(), secret, content); err != nil {
 				return err
 			}
-		} else if err := cli.SetDocument(cmd.Context(), secret, body); err != nil {
-			return err
+		} else {
+			if !since.IsZero() {
+				cur, err := cli.GetDocumentJSON(cmd.Context(), secret)
+				if err != nil {
+					return err
+				}
+				if err := checkDocUnmodified(cur, since); err != nil {
+					return err
+				}
+			}
+			if err := cli.SetDocument(cmd.Context(), secret, body); err != nil {
+				return err
+			}
 		}
 		fmt.Println("Document updated.")
 		return nil
@@ -197,15 +226,21 @@ anything else Markdown cannot express survive. Only the appended part goes throu
 Markdown, converted by Fibery itself.
 
 The addition is the positional text (escapes interpreted) or --file (verbatim,
-"-" = stdin). Callouts and --if-unmodified-since work as in "doc set".
+"-" = stdin). Callouts and --if-unmodified-since work as in "doc set"; the guard
+is checked against the same read the append splices into.
 
 Examples:
   fibery doc append abc123secret "## New section\n\nMore text"
   fibery doc append https://acme.fibery.io/Development/My-Doc-280 "appended line"
+  fibery doc append 42 "appended" --db "Space/Database" --field "Space/Description"
   fibery doc append 42 --db "Space/Database" --field "Space/Description" --file section.md`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		addition, err := docBodyFromArgs(args, docFile)
+		md, err := docBodyFromArgs(args, docFile)
+		if err != nil {
+			return err
+		}
+		since, err := parseUnmodifiedSince(docIfUnmodifiedSince)
 		if err != nil {
 			return err
 		}
@@ -213,10 +248,8 @@ Examples:
 		if err != nil {
 			return err
 		}
-		if err := checkDocUnmodified(cmd.Context(), secret, docIfUnmodifiedSince); err != nil {
-			return err
-		}
-		nodes, err := cli.MarkdownToDocJSON(cmd.Context(), addition)
+		// Convert first, so the read the guard checks sits right before the write.
+		addition, err := cli.MarkdownToDocJSON(cmd.Context(), md)
 		if err != nil {
 			return err
 		}
@@ -224,7 +257,10 @@ Examples:
 		if err != nil {
 			return err
 		}
-		if err := appendDocNodes(&doc.Content, nodes); err != nil {
+		if err := checkDocUnmodified(doc, since); err != nil {
+			return err
+		}
+		if err := appendDocNodes(&doc.Content, addition); err != nil {
 			return err
 		}
 		if err := cli.SetDocumentJSON(cmd.Context(), secret, doc.Content); err != nil {
@@ -241,14 +277,8 @@ func docBodyFromArgs(args []string, file string) (string, error) {
 	switch {
 	case file != "" && len(args) == 2:
 		return "", fmt.Errorf("pass the body as text or with --file, not both")
-	case file == "-":
-		b, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return "", fmt.Errorf("--file -: %w", err)
-		}
-		return string(b), nil
 	case file != "":
-		b, err := os.ReadFile(file)
+		b, err := readInput(file)
 		if err != nil {
 			return "", fmt.Errorf("--file: %w", err)
 		}
@@ -260,22 +290,35 @@ func docBodyFromArgs(args []string, file string) (string, error) {
 	}
 }
 
-// checkDocUnmodified fails when the document changed after since (an RFC 3339
-// modificationDate as printed by "doc get --json-doc"). Empty since skips the check.
-func checkDocUnmodified(ctx context.Context, secret, since string) error {
+// readInput reads a file, or stdin when path is "-".
+func readInput(path string) ([]byte, error) {
+	if path == "-" {
+		return io.ReadAll(os.Stdin)
+	}
+	return os.ReadFile(path)
+}
+
+// parseUnmodifiedSince parses --if-unmodified-since (an RFC 3339 modificationDate as
+// printed by "doc get --json-doc"). Empty gives the zero time: no check.
+func parseUnmodifiedSince(since string) (time.Time, error) {
 	if since == "" {
+		return time.Time{}, nil
+	}
+	t, err := time.Parse(time.RFC3339Nano, since)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("--if-unmodified-since %q: want an RFC 3339 time such as the modificationDate from 'doc get --json-doc'", since)
+	}
+	return t, nil
+}
+
+// checkDocUnmodified fails when d changed after since. A zero since skips the check.
+func checkDocUnmodified(d *client.DocJSON, since time.Time) error {
+	if since.IsZero() {
 		return nil
 	}
-	sinceT, err := time.Parse(time.RFC3339Nano, since)
-	if err != nil {
-		return fmt.Errorf("--if-unmodified-since %q: want an RFC 3339 time such as the modificationDate from 'doc get --json-doc'", since)
-	}
-	d, err := cli.GetDocumentJSON(ctx, secret)
-	if err != nil {
-		return err
-	}
-	if docModifiedAfter(d.ModificationDate, sinceT) {
-		return fmt.Errorf("document was modified at %s, after %s — not written; re-read it with 'doc get' and apply the change again", d.ModificationDate, since)
+	if docModifiedAfter(d.ModificationDate, since) {
+		return fmt.Errorf("document was modified at %s, after %s — not written; re-read it with 'doc get' and apply the change again",
+			d.ModificationDate, since.Format(time.RFC3339Nano))
 	}
 	return nil
 }
@@ -290,38 +333,10 @@ func docModifiedAfter(modified string, since time.Time) bool {
 	return t.After(since)
 }
 
-// readDocJSONFile reads ProseMirror content for "doc set --json-doc": either the
-// full envelope printed by "doc get --json-doc" or a bare {doc, comments} object.
-// When the file carries no comments array the document's current inline comments
-// are kept, so a doc-only file does not wipe them. Their from/to anchors are not
-// remapped to the new doc.
-func readDocJSONFile(ctx context.Context, secret, path string) (client.DocContent, error) {
-	var raw []byte
-	var err error
-	if path == "-" {
-		raw, err = io.ReadAll(os.Stdin)
-	} else {
-		raw, err = os.ReadFile(path)
-	}
-	if err != nil {
-		return client.DocContent{}, fmt.Errorf("--json-doc: %w", err)
-	}
-	content, hasComments, err := parseDocJSON(raw)
-	if err != nil {
-		return client.DocContent{}, err
-	}
-	if !hasComments {
-		cur, err := cli.GetDocumentJSON(ctx, secret)
-		if err != nil {
-			return client.DocContent{}, err
-		}
-		content.Comments = cur.Content.Comments
-	}
-	return content, nil
-}
-
-// parseDocJSON decodes a --json-doc payload and reports whether it carried a
-// comments array.
+// parseDocJSON decodes a --json-doc payload — the full envelope printed by
+// "doc get --json-doc" or a bare {doc, comments} object — and reports whether it
+// carried a comments array. Without one the caller keeps the document's current
+// inline comments (their from/to anchors are not remapped).
 func parseDocJSON(raw []byte) (client.DocContent, bool, error) {
 	var probe struct {
 		Content json.RawMessage `json:"content"`
@@ -356,13 +371,13 @@ func init() {
 	docGetCmd.Flags().StringVar(&docDB, "db", "", "database name (required when passing fibery/id)")
 	docGetCmd.Flags().StringVar(&docField, "field", "", "document field name (required when passing fibery/id)")
 	docGetCmd.Flags().BoolVar(&docSecretArg, "secret", false, "treat the argument as a raw document secret (skip entity-id detection)")
-	docGetCmd.Flags().BoolVar(&docJSONDoc, "json-doc", false, "print the ProseMirror JSON envelope {secret, content:{doc, comments}, modificationDate} instead of Markdown")
 	docSetCmd.Flags().StringVar(&docDB, "db", "", "database name (required when passing fibery/id)")
 	docSetCmd.Flags().StringVar(&docField, "field", "", "document field name (required when passing fibery/id)")
 	docSetCmd.Flags().BoolVar(&docSecretArg, "secret", false, "treat the argument as a raw document secret (skip entity-id detection)")
 	docAppendCmd.Flags().StringVar(&docDB, "db", "", "database name (required when passing fibery/id)")
 	docAppendCmd.Flags().StringVar(&docField, "field", "", "document field name (required when passing fibery/id)")
 	docAppendCmd.Flags().BoolVar(&docSecretArg, "secret", false, "treat the argument as a raw document secret (skip entity-id detection)")
+	docGetCmd.Flags().BoolVar(&docJSONDoc, "json-doc", false, "print the ProseMirror JSON envelope {secret, content:{doc, comments}, modificationDate} instead of Markdown")
 	docSetCmd.Flags().StringVar(&docFile, "file", "", "read the Markdown body from a file, verbatim (\"-\" = stdin)")
 	docSetCmd.Flags().StringVar(&docSetJSONFile, "json-doc", "", "write ProseMirror JSON from a file: the 'doc get --json-doc' envelope or {doc, comments} (\"-\" = stdin)")
 	docSetCmd.Flags().StringVar(&docIfUnmodifiedSince, "if-unmodified-since", "", "refuse the write if the document's modificationDate is later than this RFC 3339 time")

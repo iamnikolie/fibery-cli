@@ -193,10 +193,16 @@ fibery update DT-42 --db "Development/Dev Task" \
 `doc set` / `doc append` take the body the same two ways: positional text
 (escapes interpreted) or `--file <path>` (verbatim; `-` reads stdin).
 
+```bash
+fibery doc set 42 --db "Development/Dev Task" --field "Development/Description" --file body.md
+fibery doc append 42 --db "Development/Dev Task" --field "Development/Description" --file section.md
+```
+
 ### Callouts
 
 Every Markdown write (`doc set/append`, `create/update --doc/--doc-file`,
-`comment`, `comment edit`) accepts callouts in two forms:
+`import`, `comment`, `comment edit`, `wiki create --file`) accepts callouts in
+two forms:
 
 ```markdown
 > [!NOTE]
@@ -210,27 +216,29 @@ Every Markdown write (`doc set/append`, `create/update --doc/--doc-file`,
 ```
 
 `[!NOTE]` and `[!CAUTION]` are the only short forms; any other `[!KIND]` stays
-a plain quote. `doc get` returns callouts in the native form, and writing that
-output back is lossless — so get → edit → set keeps callouts made in the UI.
-Copy the native line from `doc get` of a document that has the callout you want.
+a plain quote, and a marker inside fenced code is left alone. `doc get` returns
+callouts in the native form, and writing that output back is lossless — so
+get → edit → set keeps callouts made in the UI. Copy the native line from
+`doc get` of a document that has the callout you want.
 
 ### Safe overwrite and raw JSON
 
 ```bash
 # Read the modificationDate, edit, write only if nobody changed the doc since
-M=$(fibery doc get 42 --db "Development/Dev Task" --field "Development/description" --json-doc | jq -r .modificationDate)
-fibery doc set 42 --db "Development/Dev Task" --field "Development/description" \
+M=$(fibery doc get 42 --db "Development/Dev Task" --field "Development/Description" --json-doc | jq -r .modificationDate)
+fibery doc set 42 --db "Development/Dev Task" --field "Development/Description" \
   --file body.md --if-unmodified-since "$M"     # refuses if the doc changed
 
 # ProseMirror JSON — for nodes Markdown cannot carry
-fibery doc get 42 --db "Development/Dev Task" --field "Development/description" --json-doc > doc.json
-fibery doc set 42 --db "Development/Dev Task" --field "Development/description" --json-doc doc.json
+fibery doc get 42 --db "Development/Dev Task" --field "Development/Description" --json-doc > doc.json
+fibery doc set 42 --db "Development/Dev Task" --field "Development/Description" --json-doc doc.json
 ```
 
 `--json-doc` on `set` takes the `doc get --json-doc` envelope or a bare
 `{doc, comments}`; without a `comments` array (or with `null`) the document keeps
 its inline comments — their anchors are not remapped, so edit `doc` in place or pass
-`comments` yourself.
+`comments` yourself. The guard and the write are separate requests: it narrows
+the race with a UI edit, it does not close it.
 
 ## Views (lists/tables), incl. inline views in rich text
 
