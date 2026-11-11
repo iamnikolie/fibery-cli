@@ -45,7 +45,7 @@ func classifyImportRow(row map[string]json.RawMessage, canon func(string) string
 			continue
 		}
 		var v any
-		json.Unmarshal(rawVal, &v)
+		_ = json.Unmarshal(rawVal, &v)
 		passthrough[k] = v
 	}
 	return
@@ -171,7 +171,7 @@ Usage:
 						items = append(items, resolved)
 					} else {
 						var v any
-						json.Unmarshal(rawItem, &v)
+						_ = json.Unmarshal(rawItem, &v)
 						items = append(items, v)
 					}
 				}

@@ -38,11 +38,12 @@ Example:
 		}
 		schema, _ := cache.LoadSchema(account)
 		place := v.ContainerType
-		if v.ContainerType == "app" {
+		switch v.ContainerType {
+		case "app":
 			if apps, err := loadAppNames(cmd.Context()); err == nil {
 				place = "space " + apps[v.ContainerAppID]
 			}
-		} else if v.ContainerType == "object" {
+		case "object":
 			place = fmt.Sprintf("inside %s #%s", typeNameByID(schema, v.ContainerEntityTypeID), v.ContainerEntityID)
 		}
 		names, dead := viewDBNames(schema, v.Meta)

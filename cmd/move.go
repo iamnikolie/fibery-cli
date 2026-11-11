@@ -804,7 +804,6 @@ type mover struct {
 	src, dst                           *client.Client
 	users                              *userMap // nil inside one workspace
 	label                              string   // source of legacy ids
-	schema                             map[string]any
 	p                                  movePlan
 	legacy                             string
 	consts                             map[string]any

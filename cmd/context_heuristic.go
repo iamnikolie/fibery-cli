@@ -69,10 +69,7 @@ func isEntityRelationType(typ string) bool {
 	case "fibery/user", "Collaboration~Documents/Document", "Collaboration~Documents/Reference":
 		return false
 	}
-	if strings.HasPrefix(typ, "fibery/") {
-		return false
-	}
-	return true
+	return !strings.HasPrefix(typ, "fibery/")
 }
 
 // classifyProfile builds a draft Profile for db from the cached schema, plus a

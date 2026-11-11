@@ -23,7 +23,7 @@ func TestClient_One_Success(t *testing.T) {
 		assert.Equal(t, "fibery.identity/me", cmds[0]["command"])
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]map[string]any{
+		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{"success": true, "result": map[string]any{"user/name": "Alice"}},
 		})
 	}))
@@ -44,7 +44,7 @@ func TestClient_One_Success(t *testing.T) {
 func TestClient_One_APIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]map[string]any{
+		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{"success": false, "error": map[string]any{"message": "not found"}},
 		})
 	}))
@@ -89,7 +89,7 @@ func TestClient_QueryView_ResolvesDocumentSecret(t *testing.T) {
 		assert.Equal(t, "280", ids[0])
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"jsonrpc": "2.0",
 			"result": []map[string]any{
 				{
@@ -134,7 +134,7 @@ func TestClient_QueryAll_PagesUntilShortPage(t *testing.T) {
 		} else {
 			rows = []map[string]any{{"id": "c"}}
 		}
-		json.NewEncoder(w).Encode([]map[string]any{{"success": true, "result": rows}})
+		_ = json.NewEncoder(w).Encode([]map[string]any{{"success": true, "result": rows}})
 	}))
 	defer srv.Close()
 
@@ -154,7 +154,7 @@ func TestClient_QueryAll_PagesUntilShortPage(t *testing.T) {
 func TestClient_QueryView_NotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "result": []any{}})
 	}))
 	defer srv.Close()
 
@@ -174,7 +174,7 @@ func TestClient_QueryViews_ReturnsAll(t *testing.T) {
 		assert.False(t, hasFilter)
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"result": []map[string]any{
 				{"fibery/name": "Doc A", "fibery/public-id": "1", "fibery/type": "document", "fibery/meta": map[string]any{"documentSecret": "s1"}},
 				{"fibery/name": "Board B", "fibery/public-id": "2", "fibery/type": "board"},
