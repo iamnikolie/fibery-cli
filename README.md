@@ -311,6 +311,29 @@ fibery doc append <uuid> "## More\n\ntext" --db "Development/Dev Task" --field "
 
 # Force secret mode when a raw secret is UUID-shaped (otherwise read as an entity id)
 fibery doc get <uuid-shaped-secret> --secret
+
+# Body from a file, verbatim (no \n escape processing); "-" reads stdin
+fibery doc set <uuid> --file body.md --db "Development/Dev Task" --field "Development/Description"
+fibery doc append <uuid> --file section.md --db "Development/Dev Task" --field "Development/Description"
+
+# Refuse the write if someone edited the doc since you read it
+fibery doc set <uuid> --file body.md --db "Development/Dev Task" --field "Development/Description" \
+  --if-unmodified-since 2026-10-14T11:11:58.339Z   # modificationDate from doc get --json-doc
+
+# ProseMirror JSON in and out (envelope with modificationDate)
+fibery doc get <uuid> --db "Development/Dev Task" --field "Development/Description" --json-doc > doc.json
+fibery doc set <uuid> --db "Development/Dev Task" --field "Development/Description" --json-doc doc.json
+```
+
+#### Callouts
+
+Every Markdown write turns `> [!NOTE]` (blue) and `> [!CAUTION]` (red) blockquotes
+into Fibery callouts. Fibery's own Markdown form passes through unchanged and is
+what `doc get` returns, so a read → edit → write round-trip keeps callouts:
+
+```markdown
+> [//]: # (callout;icon-type=icon;icon=x;color=#d40915)
+> callout body — headings, lists, code allowed
 ```
 
 #### Space / wiki documents
@@ -458,7 +481,7 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--limit` | Max results (default 20) |
 | `--hours` | Inbox lookback window in hours (default 48) |
 | `--absolute` | (inbox) Print absolute timestamps instead of relative "5h ago" |
-| `--fields a,b,c` | (get/resolve/list) Return only these field aliases — saves tokens |
+| `--fields a,b,c` | (get/resolve/list) Return only these field aliases — saves tokens; collection relations may be named too |
 | `--docs` | (get/resolve) Include rich-text document bodies (hidden by default to save tokens) |
 | `--no-docs` | (get/resolve) Also drop document secret keys from `--json` (rendered bodies already hidden by default) |
 | `--id-only` | (get/resolve/create) Print only the fibery/id UUID |
@@ -474,6 +497,9 @@ fibery files embed  "$ID" --db "Development/Dev Task" --field "Development/descr
 | `--select a,b` | (query builder) Field names to select |
 | `--order <field>` | (query builder) Sort field (`-created`, `-modified`, or any field) |
 | `--secret` | (doc get/set/append) Treat the argument as a raw document secret |
+| `--file <path>` | (doc set/append) Read the Markdown body from a file, verbatim (`-` = stdin) |
+| `--json-doc` | (doc get) Print ProseMirror JSON + `modificationDate`; (doc set) `--json-doc <file>` writes it |
+| `--if-unmodified-since <time>` | (doc set/append) Refuse the write if the document changed after this RFC 3339 time |
 | `--space <name>` | (wiki list) Filter to one space |
 | `--skip-invalid` | (create/update) Skip fields/values that don't resolve |
 | `--create-missing-enum` | (create/update/import) Create absent enum values by name |

@@ -28,3 +28,11 @@ func TestList_Items(t *testing.T) {
 	// Markdown table has header separator
 	assert.True(t, strings.Contains(out, "---"))
 }
+
+func TestList_CollectionCell(t *testing.T) {
+	var buf bytes.Buffer
+	data := json.RawMessage(`[{"Name":"R","Stories":[{"Public ID":"2363","Name":"Shake Journey"},{"Name":"Ann"},{"Public ID":"7"}]},{"Name":"E","Stories":[]}]`)
+	assert.NoError(t, render.List(&buf, data))
+	assert.Contains(t, buf.String(), "| R | 2363 Shake Journey; Ann; 7 |")
+	assert.Contains(t, buf.String(), "| E |  |")
+}

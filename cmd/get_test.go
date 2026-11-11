@@ -277,6 +277,48 @@ func TestBuildFullSelect_IncludesFiberyID(t *testing.T) {
 		"buildFullSelect must include 'Public ID' for the human-readable ID")
 }
 
+func TestWithCollectionSelects(t *testing.T) {
+	field := func(name, typ string, meta map[string]any) map[string]any {
+		return map[string]any{"fibery/name": name, "fibery/type": typ, "fibery/meta": meta}
+	}
+	coll := map[string]any{"fibery/collection?": true}
+	schema := map[string]any{
+		"fibery/types": []any{
+			map[string]any{
+				"fibery/name": "Rel/Release",
+				"fibery/fields": []any{
+					field("Rel/Name", "fibery/text", map[string]any{"ui/title?": true}),
+					field("Rel/Stories", "Prod/Story", coll),
+					field("Rel/Watchers", "fibery/user", coll),
+					field("Rel/Tags", "Rel/Tags_Rel/Release", coll),
+					field("Rel/Files", "fibery/file", coll),
+					field("Rel/Epic", "Prod/Epic", map[string]any{}),
+				},
+			},
+			map[string]any{
+				"fibery/name": "Prod/Story",
+				"fibery/fields": []any{
+					field("fibery/public-id", "fibery/text", map[string]any{}),
+					field("Prod/Title", "fibery/text", map[string]any{"ui/title?": true}),
+				},
+			},
+		},
+	}
+	base := map[string]any{"Name": []any{"Rel/Name"}}
+	got := withCollectionSelects(base, schema, "Rel/Release")
+
+	assert.Equal(t, map[string]any{
+		"q/from":   "Rel/Stories",
+		"q/select": map[string]any{"Public ID": "fibery/public-id", "Name": "Prod/Title"},
+		"q/limit":  "q/no-limit",
+	}, got["Stories"])
+	assert.Equal(t, map[string]any{"Name": "user/name", "Email": "user/email"}, got["Watchers"].(map[string]any)["q/select"])
+	assert.Equal(t, map[string]any{"Name": "enum/name"}, got["Tags"].(map[string]any)["q/select"])
+	assert.NotContains(t, got, "Files", "file collections are skipped")
+	assert.NotContains(t, got, "Epic", "single relations are not collections")
+	assert.Len(t, base, 1, "input select is not mutated")
+}
+
 func TestBuildFullSelect_URLFieldIsPrimitive(t *testing.T) {
 	schema := map[string]any{
 		"fibery/types": []any{

@@ -13,6 +13,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/iamnikolie/fibery-cli/internal/markdown"
 )
 
 // Client is the Fibery HTTP client. All requests go through request().
@@ -164,7 +166,7 @@ func (c *Client) Do(ctx context.Context, commands []Command) ([]Result, error) {
 	}
 	if c.Verbose {
 		var pretty bytes.Buffer
-		json.Indent(&pretty, body, "", "  ")
+		_ = json.Indent(&pretty, body, "", "  ")
 		fmt.Fprintf(os.Stderr, "→ POST /api/commands\n%s\n", pretty.String())
 	}
 	b, err := c.request(ctx, http.MethodPost, "/api/commands", body)
@@ -272,8 +274,9 @@ func (c *Client) DownloadFile(ctx context.Context, secret string) ([]byte, strin
 }
 
 // SetDocument writes Markdown content to a Fibery document by its secret.
-func (c *Client) SetDocument(ctx context.Context, secret, markdown string) error {
-	body, err := json.Marshal(map[string]string{"content": markdown, "type": "text/markdown"})
+// GitHub alert blockquotes are converted to Fibery callouts (markdown.ExpandCallouts).
+func (c *Client) SetDocument(ctx context.Context, secret, md string) error {
+	body, err := json.Marshal(map[string]string{"content": markdown.ExpandCallouts(md), "type": "text/markdown"})
 	if err != nil {
 		return fmt.Errorf("client.SetDocument: marshal: %w", err)
 	}
@@ -333,12 +336,13 @@ func (c *Client) SetDocumentJSON(ctx context.Context, secret string, content Doc
 // MarkdownToDocJSON converts Markdown to a ProseMirror doc using Fibery's own
 // converter: it writes the Markdown to a scratch document, reads it back as JSON
 // and deletes the scratch document. The result carries fresh node ids, so its
-// nodes can be spliced into another document.
-func (c *Client) MarkdownToDocJSON(ctx context.Context, markdown string) (json.RawMessage, error) {
+// nodes can be spliced into another document. GitHub alert blockquotes are
+// converted to Fibery callouts (markdown.ExpandCallouts).
+func (c *Client) MarkdownToDocJSON(ctx context.Context, md string) (json.RawMessage, error) {
 	secret := newUUID()
 	body, err := json.Marshal(map[string]any{
 		"command": "create-or-update-documents",
-		"args":    []any{map[string]any{"secret": secret, "content": markdown}},
+		"args":    []any{map[string]any{"secret": secret, "content": markdown.ExpandCallouts(md)}},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("client.MarkdownToDocJSON: marshal: %w", err)
@@ -696,7 +700,7 @@ func (c *Client) AddComment(ctx context.Context, db, entityID, content, parentCo
 	// Step 2: write comment content to the document
 	body, _ := json.Marshal(map[string]any{
 		"command": "create-or-update-documents",
-		"args":    []any{map[string]any{"secret": docSecret, "content": content}},
+		"args":    []any{map[string]any{"secret": docSecret, "content": markdown.ExpandCallouts(content)}},
 	})
 	if _, err := c.request(ctx, http.MethodPost, "/api/documents/commands?format=md", body); err != nil {
 		return fmt.Errorf("client.AddComment: set content: %w", err)

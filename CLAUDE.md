@@ -70,6 +70,7 @@ internal/
   cache/                       ~/.fibery/[<acct>/]schema.json load/save
   client/                      HTTP client; one place that talks to Fibery
   render/                      table / KV / CSV / TSV writers (used by --format)
+  markdown/                    rewrites applied to every Markdown write (GitHub alerts → callouts)
 ```
 
 Build artifacts: `./fibery` (gitignored). `make install` symlinks `~/.local/bin/fibery → $(CURDIR)/fibery`, so a fresh `make build` is enough to update the installed CLI — no re-install needed.
@@ -283,6 +284,13 @@ These are not documented anywhere except in the wild; encode them into helpers r
     `required? true` or "= false" filters miss unticked entities.
     Files referenced by a document keep serving right after their entity is
     deleted, but archives show some 404 later — `move` re-uploads them.
+21. **Fibery Markdown has a callout form**, absent from its docs: a blockquote whose
+    first line is `[//]: # (callout;icon-type=icon;icon=<name>;color=<hex>)`. Import
+    and export both use it, so a callout survives `doc get` → `doc set` as Markdown —
+    no JSON path is needed. The attributes map to the ProseMirror `callout` node
+    (`color`, `iconType`, `icon`). Which icon names and colors the UI renders is
+    undocumented, so `internal/markdown` only maps alert kinds to pairs copied from
+    UI-made callouts — do not add a kind with a guessed icon.
 
 ---
 

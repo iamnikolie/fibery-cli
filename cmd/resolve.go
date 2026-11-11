@@ -76,6 +76,9 @@ func runResolve(cmd *cobra.Command, rawURL string, idOnly bool, fields []string,
 	// Build a comprehensive select from schema covering all useful fields
 	schema, _ := cache.LoadSchema(account)
 	sel, docKeys := buildFullSelect(schema, db)
+	if len(fields) > 0 {
+		sel = withCollectionSelects(sel, schema, db)
+	}
 	sel, docKeys, errNarrow := narrowReadSelect(sel, docKeys, fields, noDocs, "fibery/id", "Public ID", "Name")
 	if errNarrow != nil {
 		return errNarrow
