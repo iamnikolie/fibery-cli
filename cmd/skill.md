@@ -66,7 +66,7 @@ entity (curated fields + document bodies + all comments) **and** its headline gr
 | `fibery comment-inline delete <url-or-id> --thread <id>` | Delete an inline comment thread | `--db`, `--field`, `--thread` (required) |
 | `fibery doc get <secret\|id\|url>` | Get document as Markdown (callouts in Fibery's native form) | `--db`, `--field` (entity ID), `--secret` (raw UUID secret), `--json-doc` (ProseMirror envelope + `modificationDate`) |
 | `fibery doc set <secret\|id\|url> [md]` | Set document content (full replace) | `--db`, `--field`, `--secret`, `--file` (verbatim, `-` = stdin), `--json-doc <file>`, `--if-unmodified-since <modificationDate>` |
-| `fibery doc append <secret\|id\|url> [md]` | Append Markdown to the end of a document; existing content (inline comments, views, mentions) is kept untouched | `--db`, `--field`, `--secret`, `--file`, `--if-unmodified-since` |
+| `fibery doc append <secret\|id\|url> [md]` | Append Markdown to the end of a document; existing content (inline comments, views, mentions) is kept untouched; the addition is converted locally, no temporary document | `--db`, `--field`, `--secret`, `--file`, `--if-unmodified-since` |
 | `fibery wiki list` | List space/wiki documents (left-nav pages); `docs list` also works | `--space`, `--limit` |
 | `fibery view create` | Create a list/table/board view over a database; `--embed` puts it inline in an entity's rich text | `--db`, `--name` (required), `--type list\|table\|board`, `--columns`, `--rows` (board), `--filter` (repeatable), `--any`, `--where`, `--params`, `--embed`, `--embed-db`, `--embed-field`, `--after-heading` |
 | `fibery view embed <view>` | Insert an existing view (uuid or public id) inline into a rich-text field | `--embed` (required), `--embed-db`, `--embed-field`, `--after-heading` |
@@ -676,7 +676,8 @@ fibery doc get <uuid> --db "Development/Dev Task" --field "Development/Descripti
 fibery doc set <uuid> "# Title\nContent" --db "Development/Dev Task" --field "Development/Description"
 
 # Append instead of replacing (any of secret / id / url). Safe on documents with
-# inline comments or embedded views: only the appended part goes through Markdown.
+# inline comments or embedded views: only the appended part goes through Markdown,
+# converted by the CLI into the same nodes Fibery's import makes.
 fibery doc append <uuid> "## New section\n\nmore" --db "Development/Dev Task" --field "Development/Description"
 
 # If a raw document secret happens to be UUID-shaped, force secret mode with --secret
@@ -701,7 +702,12 @@ fibery doc append "https://acme.fibery.io/Development/My-Doc-280" "appended line
 Note: `doc set` round-trips through Fibery's markdown normalizer, which drops
 trailing-whitespace hard line breaks (cosmetic) and rewrites the whole body —
 inline comments and embedded views are lost. `doc append` does not touch the
-existing body.
+existing body. It converts the addition itself: headings, lists, task lists,
+quotes, callouts, code, tables, images (always a block of their own), links,
+`[[#@<typeId>/<entityId>]]` mentions, `[[#^<typeId>/<entityId>]]` references and
+common `:emoji:` shortcodes come out as Fibery would make them. Raw HTML stays
+literal text (`<br>` is a line break, `<span>` tags are dropped); `~one tilde~`
+is not strikethrough.
 
 **List / download file attachments:**
 ```bash

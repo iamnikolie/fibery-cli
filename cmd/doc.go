@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/iamnikolie/fibery-cli/internal/client"
+	"github.com/iamnikolie/fibery-cli/internal/markdown"
 )
 
 var docCmd = &cobra.Command{
@@ -223,7 +224,7 @@ or an entity ID with --db and --field.
 
 The existing content is kept as is — inline comments, embedded views, mentions and
 anything else Markdown cannot express survive. Only the appended part goes through
-Markdown, converted by Fibery itself.
+Markdown, converted by the CLI into the same rich-text nodes Fibery's import makes.
 
 The addition is the positional text (escapes interpreted) or --file (verbatim,
 "-" = stdin). Callouts and --if-unmodified-since work as in "doc set"; the guard
@@ -248,8 +249,9 @@ Examples:
 		if err != nil {
 			return err
 		}
-		// Convert first, so the read the guard checks sits right before the write.
-		addition, err := cli.MarkdownToDocJSON(cmd.Context(), md)
+		// Converted locally: Fibery has no Markdown → ProseMirror endpoint, and a
+		// scratch document with no owning entity or view is refused (gotcha 17).
+		addition, err := markdown.ToDoc(md, client.NewUUID)
 		if err != nil {
 			return err
 		}

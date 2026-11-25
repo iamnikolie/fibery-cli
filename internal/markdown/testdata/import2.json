@@ -1,0 +1,755 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 1
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Setext H1"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Marks: "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://u.example",
+                "title": null
+              }
+            },
+            {
+              "type": "em"
+            },
+            {
+              "type": "strong"
+            },
+            {
+              "type": "code"
+            },
+            {
+              "type": "strike"
+            }
+          ],
+          "text": "x"
+        },
+        {
+          "type": "text",
+          "text": " and "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://a.example",
+                "title": null
+              }
+            },
+            {
+              "type": "strong"
+            }
+          ],
+          "text": "bold link"
+        },
+        {
+          "type": "text",
+          "text": " and "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://b.example",
+                "title": null
+              }
+            },
+            {
+              "type": "strong"
+            }
+          ],
+          "text": "inner bold"
+        },
+        {
+          "type": "text",
+          "text": " and "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "code"
+            }
+          ],
+          "text": "code **not bold**"
+        },
+        {
+          "type": "text",
+          "text": " and ~single~ and "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "strong"
+            }
+          ],
+          "text": "under"
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "em"
+            }
+          ],
+          "text": "under"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Escapes: *not em* # [x] a_b snake_case_word 2"
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "em"
+            }
+          ],
+          "text": "3"
+        },
+        {
+          "type": "text",
+          "text": "4"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Inline image "
+        }
+      ]
+    },
+    {
+      "type": "imageBlock",
+      "attrs": {
+        "src": "https://example.com/p.png",
+        "alt": "pic",
+        "title": "t",
+        "size": null,
+        "type": null,
+        "nodeHeight": 400,
+        "nodeWidth": 900,
+        "nodePageWidth": true,
+        "nodeFullWidth": false
+      }
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": " in text and "
+        }
+      ]
+    },
+    {
+      "type": "imageBlock",
+      "attrs": {
+        "src": "https://example.com/i.png",
+        "alt": "img",
+        "title": null,
+        "size": null,
+        "type": null,
+        "nodeHeight": 400,
+        "nodeWidth": 900,
+        "nodePageWidth": true,
+        "nodeFullWidth": false
+      }
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "bullet_list",
+      "attrs": {},
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "star bullet"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "bullet_list",
+      "attrs": {},
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "plus bullet"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ordered_list",
+      "attrs": {
+        "order": 1
+      },
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "paren list"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "two"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "blockquote",
+      "attrs": {},
+      "content": [
+        {
+          "type": "paragraph",
+          "attrs": {},
+          "content": [
+            {
+              "type": "text",
+              "text": "outer"
+            }
+          ]
+        },
+        {
+          "type": "blockquote",
+          "attrs": {},
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "inner quote"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "bullet_list",
+          "attrs": {},
+          "content": [
+            {
+              "type": "list_item",
+              "attrs": {
+                "state": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {},
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "list in quote"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "code_block",
+          "attrs": {
+            "language": "",
+            "wrapCode": false,
+            "mode": "split",
+            "nodeHeight": 400,
+            "nodeWidth": 900,
+            "nodePageWidth": true,
+            "nodeFullWidth": false
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "code in quote"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "bullet_list",
+      "attrs": {},
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "item with code:"
+                }
+              ]
+            },
+            {
+              "type": "code_block",
+              "attrs": {
+                "language": "sh",
+                "wrapCode": false,
+                "mode": "split",
+                "nodeHeight": 400,
+                "nodeWidth": 900,
+                "nodePageWidth": true,
+                "nodeFullWidth": false
+              },
+              "content": [
+                {
+                  "type": "text",
+                  "text": "echo hi"
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "second para in item"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": "TODO"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "task with "
+                },
+                {
+                  "type": "text",
+                  "marks": [
+                    {
+                      "type": "strong"
+                    }
+                  ],
+                  "text": "bold"
+                }
+              ]
+            },
+            {
+              "type": "bullet_list",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "list_item",
+                  "attrs": {
+                    "state": "DONE"
+                  },
+                  "content": [
+                    {
+                      "type": "paragraph",
+                      "attrs": {},
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "nested done"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "ordered_list",
+      "attrs": {
+        "order": 1
+      },
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": "TODO"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "ordered task"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "attrs": {
+        "color": "#199EE3",
+        "iconType": "icon",
+        "icon": "exclamation-circle"
+      },
+      "content": [
+        {
+          "type": "heading",
+          "attrs": {
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Heading in callout"
+            }
+          ]
+        },
+        {
+          "type": "bullet_list",
+          "attrs": {},
+          "content": [
+            {
+              "type": "list_item",
+              "attrs": {
+                "state": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {},
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "list in callout"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "<div>html block</div>"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Line with "
+        },
+        {
+          "type": "hard_break"
+        },
+        {
+          "type": "text",
+          "text": " inline and span."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Unknown :notanemoji: and "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":+1:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " and "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":heart:"
+          }
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Trailing hashes ## heading not"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": {
+        "level": 3
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Closed heading"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "attrs": {},
+      "content": [
+        {
+          "type": "table_row",
+          "attrs": {},
+          "content": [
+            {
+              "type": "table_header",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null,
+                "background": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {},
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "a | b"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "table_header",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null,
+                "background": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {},
+                  "content": [
+                    {
+                      "type": "text",
+                      "marks": [
+                        {
+                          "type": "code"
+                        }
+                      ],
+                      "text": "c"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "table_row",
+          "attrs": {},
+          "content": [
+            {
+              "type": "table_cell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null,
+                "background": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {},
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "x"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "table_cell",
+              "attrs": {
+                "colspan": 1,
+                "rowspan": 1,
+                "colwidth": null,
+                "align": null,
+                "background": null
+              },
+              "content": [
+                {
+                  "type": "paragraph",
+                  "attrs": {}
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "horizontal_rule",
+      "attrs": {}
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Last paragraph"
+        }
+      ]
+    }
+  ]
+}

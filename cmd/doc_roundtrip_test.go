@@ -193,10 +193,16 @@ func TestDocAppendFile_ExpandsCalloutAndKeepsBody(t *testing.T) {
 	docFile = path
 	_, err := runDoc(t, func() error { return docAppendCmd.RunE(docAppendCmd, []string{"sec"}) })
 	require.NoError(t, err)
-	assert.Equal(t, []string{"scratch", "delete", "json sec"}, f.writes)
-	doc := string(f.doc["sec"])
-	assert.Contains(t, doc, `"fiberyView"`, "the existing body is spliced, not rewritten")
-	assert.Contains(t, doc, "color=#d40915", "the appended Markdown went through ExpandCallouts")
+	assert.Equal(t, []string{"json sec"}, f.writes, "converted locally: no scratch document is created")
+	var doc struct {
+		Content []map[string]any `json:"content"`
+	}
+	require.NoError(t, json.Unmarshal(f.doc["sec"], &doc))
+	require.Len(t, doc.Content, 2)
+	assert.Equal(t, map[string]any{"type": "fiberyView", "attrs": map[string]any{"viewId": "v1"}}, doc.Content[0],
+		"the existing body is spliced, not rewritten")
+	assert.Equal(t, "callout", doc.Content[1]["type"], "the appended Markdown went through ExpandCallouts")
+	assert.Equal(t, "#d40915", doc.Content[1]["attrs"].(map[string]any)["color"])
 	assert.Len(t, f.comments["sec"], 1, "inline comments survive")
 }
 

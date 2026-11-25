@@ -70,7 +70,8 @@ internal/
   cache/                       ~/.fibery/[<acct>/]schema.json load/save
   client/                      HTTP client; one place that talks to Fibery
   render/                      table / KV / CSV / TSV writers (used by --format)
-  markdown/                    rewrites applied to every Markdown write (GitHub alerts → callouts)
+  markdown/                    rewrites applied to every Markdown write (GitHub alerts → callouts);
+                               ToDoc: local Markdown → ProseMirror for doc append (testdata = Fibery's own import output)
 ```
 
 Build artifacts: `./fibery` (gitignored). `make install` symlinks `~/.local/bin/fibery → $(CURDIR)/fibery`, so a fresh `make build` is enough to update the installed CLI — no re-install needed.
@@ -247,14 +248,24 @@ These are not documented anywhere except in the wild; encode them into helpers r
     `document` with `meta.documentSecret`; create the document first
     (`create-or-update-documents`), then the view (`wiki create`).
 
-17. **No known Markdown → ProseMirror endpoint, but any secret is a document.**
-    `POST /api/documents/commands?format=md` `create-or-update-documents` creates a
-    document for a fresh secret with no owning entity; read it back with `?format=json`
-    and remove it with `delete-documents` `{"secret": ...}` (no `?format`). Nodes come
-    back with fresh `attrs.id`/`guid`, so they splice into another doc safely.
-    `client.MarkdownToDocJSON` does this; `doc append` uses it so the existing body
-    never goes through Markdown (a Markdown read-modify-write drops inline comments
-    and `fiberyView` nodes).
+17. **No Markdown → ProseMirror endpoint, and no document without a container.**
+    Fibery checks access to a document against its container (an entity's rich-text
+    field or a view); a document written for a fresh secret that nothing owns gets
+    `403 No accessible container found` (enforced in every workspace from 2026-11-30).
+    So never send `create-or-update-documents` for a secret before its entity or view
+    exists — the old scratch-document conversion (write Markdown to a fresh secret,
+    read it back as JSON, delete it) is gone for that reason. `doc append` converts
+    the addition locally with `markdown.ToDoc` and splices the nodes after the existing
+    body, which never goes through Markdown (a Markdown read-modify-write drops inline
+    comments and `fiberyView` nodes). `ToDoc` copies Fibery's import: every block node
+    gets a fresh `attrs.id` (paragraph, heading and code also `guid` = id), a line
+    break is a `hard_break`, marks are ordered link, em, strong, code, strike, an image
+    is always an `imageBlock` that splits its paragraph, only `~~` strikes, raw HTML
+    stays text. `internal/markdown/testdata/import*.{md,json}` are Markdown and the
+    doc Fibery's import made for it; when Fibery's output changes, re-capture them
+    from a throwaway entity (`doc set` then `doc get --json-doc`, ids stripped, entity
+    ids replaced) rather than editing them by hand. An emoji shortcode is a node only
+    when listed in `internal/markdown/emoji.go` (each checked against the import).
 
 18. **A database owns helper types that outlive it.** Every single-select field
     has its own enum type `Space/Field_Space/Database`, and the workflow lives in
@@ -292,8 +303,8 @@ These are not documented anywhere except in the wild; encode them into helpers r
     (`color`, `iconType`, `icon`). Which icon names and colors the UI renders is
     undocumented, so `internal/markdown` only maps alert kinds to pairs copied from
     UI-made callouts — do not add a kind with a guessed icon. Every client method
-    that sends Markdown (`SetDocument`, `MarkdownToDocJSON`, `CreateDocumentMarkdown`,
-    `AddComment`) runs it through `markdown.ExpandCallouts`, which asks a CommonMark
+    that sends Markdown (`SetDocument`, `CreateDocumentMarkdown`, `AddComment`) and
+    `markdown.ToDoc` run it through `markdown.ExpandCallouts`, which asks a CommonMark
     parser (goldmark) which lines open a blockquote — hand-rolled fence/list
     tracking kept missing container cases (quotes in list items, lazy continuation).
 

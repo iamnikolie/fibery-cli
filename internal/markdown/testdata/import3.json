@@ -1,0 +1,343 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "ordered_list",
+      "attrs": {
+        "order": 3
+      },
+      "content": [
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "starts at three"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "list_item",
+          "attrs": {
+            "state": null
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "attrs": {},
+              "content": [
+                {
+                  "type": "text",
+                  "text": "four"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Ref "
+        },
+        {
+          "type": "entity",
+          "attrs": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "typeId": "11111111-1111-4111-8111-111111111111",
+            "meta": {}
+          }
+        },
+        {
+          "type": "text",
+          "text": " and mention in "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "strong"
+            }
+          ],
+          "text": "bold "
+        },
+        {
+          "type": "mention",
+          "attrs": {
+            "id": "22222222-2222-4222-8222-222222222222",
+            "typeId": "11111111-1111-4111-8111-111111111111",
+            "meta": {}
+          },
+          "marks": [
+            {
+              "type": "strong"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " and "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "code"
+            }
+          ],
+          "text": "[[#@11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222]]"
+        },
+        {
+          "type": "text",
+          "text": " code."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Emoji "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":white_check_mark:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":warning:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":x:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":rocket:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":tada:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":thumbsup:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":fire:"
+          }
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "emoji",
+          "attrs": {
+            "code": ":eyes:"
+          }
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "<div>"
+        },
+        {
+          "type": "hard_break"
+        },
+        {
+          "type": "text",
+          "text": "multi line"
+        },
+        {
+          "type": "hard_break"
+        },
+        {
+          "type": "text",
+          "text": "html block"
+        },
+        {
+          "type": "hard_break"
+        },
+        {
+          "type": "text",
+          "text": "</div>"
+        }
+      ]
+    },
+    {
+      "type": "imageBlock",
+      "attrs": {
+        "src": "https://example.com/noalt.png",
+        "alt": null,
+        "title": null,
+        "size": null,
+        "type": null,
+        "nodeHeight": 400,
+        "nodeWidth": 900,
+        "nodePageWidth": true,
+        "nodeFullWidth": false
+      }
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://x.example",
+                "title": null
+              }
+            }
+          ],
+          "text": "link "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://x.example",
+                "title": null
+              }
+            },
+            {
+              "type": "em"
+            }
+          ],
+          "text": "em"
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://x.example",
+                "title": null
+              }
+            }
+          ],
+          "text": " text"
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://ref.example",
+                "title": null
+              }
+            }
+          ],
+          "text": "ref link"
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "mailto:mail@example.com",
+                "title": null
+              }
+            }
+          ],
+          "text": "mail@example.com"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Tab\tinside and   multiple spaces   kept?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "© © 😀 \\ backslash"
+        }
+      ]
+    }
+  ]
+}

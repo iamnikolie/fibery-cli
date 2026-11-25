@@ -1,0 +1,42 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "A <b>b</b> <i>i</i> s <u>u</u> <em>e</em> <strong>st</strong> <a href=\"https://h.example\">a</a> <kbd>k</kbd> <sub>sub</sub> <sup>sup</sup> <code>c</code> <mark>m</mark> <s>del</s> <del>d2</del> <div>dv</div> <p>p</p> <img src=\"https://example.com/x.png\"> <!-- comment --> <foo>foo</foo> "
+        },
+        {
+          "type": "hard_break"
+        },
+        {
+          "type": "text",
+          "text": " end"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "<b>start bold</b> mid"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "start span mid"
+        }
+      ]
+    }
+  ]
+}
